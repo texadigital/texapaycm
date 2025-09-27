@@ -7,12 +7,13 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel as FilamentPanel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -22,7 +23,9 @@ class User extends Authenticatable implements FilamentUser
     protected $fillable = [
         'name',
         'email',
+        'phone',
         'password',
+        'pin_hash',
         'is_admin',
     ];
 
@@ -33,6 +36,7 @@ class User extends Authenticatable implements FilamentUser
      */
     protected $hidden = [
         'password',
+        'pin_hash',
         'remember_token',
     ];
 

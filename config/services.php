@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'pawapay' => [
+        'sandbox' => env('PAWAPAY_SANDBOX', true),
+        'base_url' => env('PAWAPAY_BASE_URL', 'https://api.sandbox.pawapay.io'),
+        'api_key' => env('PAWAPAY_API_KEY'),
+        'webhook_base_url' => rtrim(env('APP_URL', 'http://localhost'), '/'),
+    ],
 ];

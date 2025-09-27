@@ -7,12 +7,14 @@ use App\Models\Transfer;
 use App\Services\OpenExchangeRates;
 use App\Services\PawaPay;
 use App\Services\SafeHaven;
+use App\Services\RefundService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class TransferController extends Controller
 {
@@ -166,10 +168,21 @@ class TransferController extends Controller
             // Local CM format -> add country code
             $digits = '237' . $digits;
         }
-        // Basic validation of CM E.164
+        
+        // Enhanced validation of CM E.164
         if (!(strlen($digits) === 12 && str_starts_with($digits, '237'))) {
             return back()->with('error', 'Please enter a valid Cameroon MoMo number in international format (e.g., 2376XXXXXXXX).');
         }
+        
+        // Validate provider-specific format
+        $prefix3 = substr($digits, 3, 3);
+        $isValidMtn = preg_match('/^(65[0-9]|6[7-8][0-9])/', $prefix3);
+        $isValidOrange = preg_match('/^69[0-9]/', $prefix3);
+        
+        if (!($isValidMtn || $isValidOrange)) {
+            return back()->with('error', 'Invalid mobile money number. Please enter a valid MTN or Orange mobile money number.');
+        }
+        
         $msisdn = $digits;
 
         // Provider detection for Cameroon via .env-configurable prefixes
@@ -216,71 +229,127 @@ class TransferController extends Controller
             }
         }
 
-        // Create Transfer record in quote_created
-        $userId = auth()->id();
-        if (!$userId) {
-            $userId = \App\Models\User::query()->min('id');
-        }
-        $transfer = Transfer::create([
-            'user_id' => $userId,
-            'quote_id' => $quote->id,
-            'recipient_bank_code' => session('transfer.bank_code'),
-            'recipient_bank_name' => session('transfer.bank_name'),
-            'recipient_account_number' => session('transfer.account_number'),
-            'recipient_account_name' => session('transfer.account_name'),
-            'name_enquiry_reference' => session('transfer.name_enquiry_reference'),
-            'amount_xaf' => $quote->amount_xaf,
-            'fee_total_xaf' => $quote->fee_total_xaf,
-            'total_pay_xaf' => $quote->total_pay_xaf,
-            'receive_ngn_minor' => $quote->receive_ngn_minor,
-            'adjusted_rate_xaf_to_ngn' => $quote->adjusted_rate_xaf_to_ngn,
-            'usd_to_xaf' => $quote->usd_to_xaf,
-            'usd_to_ngn' => $quote->usd_to_ngn,
-            'fx_fetched_at' => $quote->fx_fetched_at,
-            'status' => 'payin_pending',
-            'timeline' => [
-                ['state' => 'quote_created', 'at' => now()->toIso8601String()],
-                ['state' => 'payin_pending', 'at' => now()->toIso8601String()],
-            ],
-        ]);
+        // Start a database transaction to ensure data consistency
+        return DB::transaction(function () use ($quote, $msisdn, $provider) {
+            // Check if a transfer with this quote already exists
+            $existingTransfer = Transfer::where('quote_id', $quote->id)->first();
+            if ($existingTransfer) {
+                return redirect()
+                    ->route('transfer.receipt', $existingTransfer)
+                    ->with('info', 'A transaction with this quote already exists.');
+            }
 
-        // Initiate pawaPay
+            // Get the authenticated user or fallback to system user
+            $userId = auth()->id() ?? \App\Models\User::query()->min('id');
+            
+            // Create the transfer record
+            $transfer = Transfer::create([
+                'user_id' => $userId,
+                'quote_id' => $quote->id,
+                'recipient_bank_code' => session('transfer.bank_code'),
+                'recipient_bank_name' => session('transfer.bank_name'),
+                'recipient_account_number' => session('transfer.account_number'),
+                'recipient_account_name' => session('transfer.account_name'),
+                'name_enquiry_reference' => session('transfer.name_enquiry_reference'),
+                'amount_xaf' => $quote->amount_xaf,
+                'fee_total_xaf' => $quote->fee_total_xaf,
+                'total_pay_xaf' => $quote->total_pay_xaf,
+                'receive_ngn_minor' => $quote->receive_ngn_minor,
+                'adjusted_rate_xaf_to_ngn' => $quote->adjusted_rate_xaf_to_ngn,
+                'usd_to_xaf' => $quote->usd_to_xaf,
+                'usd_to_ngn' => $quote->usd_to_ngn,
+                'fx_fetched_at' => $quote->fx_fetched_at,
+                'status' => 'payin_pending',
+                'msisdn' => $msisdn,
+                'provider' => $provider,
+                'timeline' => [
+                    ['state' => 'quote_created', 'at' => now()->toIso8601String()],
+                    ['state' => 'payin_pending', 'at' => now()->toIso8601String(), 'msisdn' => $msisdn, 'provider' => $provider],
+                ],
+            ]);
+
+            // Log the transfer creation
+            \Log::info('Transfer created', [
+                'transfer_id' => $transfer->id,
+                'msisdn' => substr($msisdn, 0, 5) . '...' . substr($msisdn, -2),
+                'provider' => $provider,
+                'amount_xaf' => $quote->amount_xaf,
+            ]);
+
+            return $transfer;
+        });
+
+        // Generate a unique reference for this transaction
+        $reference = (string) Str::uuid();
+        
+        // Initiate payment with PawaPay
         $resp = $pawa->initiatePayIn([
-            'amount_xaf_minor' => $quote->total_pay_xaf,
+            'amount_xaf_minor' => (int)($quote->total_pay_xaf * 100), // Convert to minor units
             'msisdn' => $msisdn,
             'currency' => 'XAF',
-            'reference' => (string) Str::uuid(),
-            'callback_url' => env('PAWAPAY_CALLBACK_URL', url('/webhooks/pawapay')),
+            'reference' => $reference,
+            'callback_url' => route('webhooks.pawapay'),
             'provider' => $provider,
             'client_ref' => $quote->quote_ref ?? (string) Str::uuid(),
             'customer_message' => env('PAWAPAY_CUSTOMER_MESSAGE', 'TexaPay Payment'),
         ]);
 
-        $transfer->update([
-            'payin_ref' => $resp['ref'],
-            'payin_status' => $resp['status'],
-        ]);
-
-        if ($resp['status'] === 'failed') {
+        if (!isset($resp['success']) || $resp['success'] !== true) {
+            // Log the failure
+            $errorMessage = $resp['message'] ?? 'Failed to initiate payment';
             $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
-            $timeline[] = ['state' => 'payin_failed', 'at' => now()->toIso8601String(), 'reason' => $resp['raw']['message'] ?? ($resp['raw']['error'] ?? 'Unknown')];
-            $transfer->update(['status' => 'failed', 'timeline' => $timeline]);
-            $reason = $resp['raw']['message'] ?? ($resp['raw']['error'] ?? 'MoMo payment failed.');
-            \Log::warning('PawaPay deposit failed', [
-                'transfer_id' => $transfer->id,
-                'http_status' => $resp['raw']['http_status'] ?? null,
-                'provider' => $provider,
-                'msisdn' => substr($msisdn,0,5) . '…' . substr($msisdn,-2),
-                'raw' => $resp['raw'] ?? null,
+            $timeline[] = [
+                'state' => 'payin_failed',
+                'at' => now()->toIso8601String(),
+                'reason' => $errorMessage,
+                'raw' => $resp
+            ];
+            
+            $transfer->update([
+                'status' => 'failed',
+                'payin_status' => 'failed',
+                'timeline' => $timeline
             ]);
+            
+            \Log::error('Failed to initiate PawaPay payment', [
+                'transfer_id' => $transfer->id,
+                'msisdn' => substr($msisdn, 0, 5) . '...' . substr($msisdn, -2),
+                'provider' => $provider,
+                'response' => $resp
+            ]);
+            
             return redirect()
                 ->route('transfer.receipt', $transfer)
-                ->with('error', 'MoMo payment failed: ' . $reason)
-                ->with('error_details', json_encode($resp['raw'] ?? [], JSON_PRETTY_PRINT));
+                ->with('error', 'Failed to initiate payment: ' . $errorMessage);
         }
-
-        // For now, treat non-failed as success to allow proceeding to payout in later step
-        return redirect()->route('transfer.receipt', $transfer)->with('info', 'Payment pending. This is a demo step.');
+        
+        // Update transfer with payment reference and pending status
+        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+        $timeline[] = [
+            'state' => 'payin_initiated',
+            'at' => now()->toIso8601String(),
+            'reference' => $reference,
+            'provider' => $provider
+        ];
+        
+        $transfer->update([
+            'payin_ref' => $reference,
+            'payin_status' => 'pending',
+            'status' => 'payin_pending',
+            'timeline' => $timeline
+        ]);
+        
+        // Log the successful payment initiation
+        \Log::info('Payment initiated successfully', [
+            'transfer_id' => $transfer->id,
+            'reference' => $reference,
+            'provider' => $provider
+        ]);
+        
+        // Redirect to receipt page with pending status
+        return redirect()
+            ->route('transfer.receipt', $transfer)
+            ->with('info', 'Payment initiated. Please complete the payment on your mobile money app.');
     }
 
     public function showReceipt(Request $request, Transfer $transfer): View
@@ -288,77 +357,368 @@ class TransferController extends Controller
         return view('transfer.receipt', compact('transfer'));
     }
 
-    public function initiatePayout(Request $request, Transfer $transfer, SafeHaven $safeHaven): RedirectResponse
+    /**
+     * Handle the payout initiation with idempotency and transaction safety
+     * 
+     * This method ensures that payouts are processed in an idempotent manner by:
+     * 1. Using database transactions with row-level locking
+     * 2. Generating and tracking idempotency keys
+     * 3. Properly handling concurrent requests
+     * 4. Providing detailed error handling and logging
+     */
+    public function initiatePayout(Request $request, Transfer $transfer, SafeHaven $safeHaven, RefundService $refundService = null)
     {
-        // In a real flow, this would be triggered automatically on pay-in success or via webhook.
-        if (in_array($transfer->status, ['payout_success', 'failed'])) {
-            return back()->with('info', 'Transfer already completed.');
-        }
+        // Start a database transaction with a lock on the transfer record
+        return DB::transaction(function () use ($request, $transfer, $safeHaven, $refundService) {
+            $refundService = $refundService ?? app(RefundService::class);
+            // Reload the transfer with a lock to prevent concurrent modifications
+            $transfer = Transfer::lockForUpdate()->findOrFail($transfer->id);
+            
+            // Check if payout was already successful
+            if ($transfer->payout_status === 'success') {
+                Log::info('Payout already completed', [
+                    'transfer_id' => $transfer->id,
+                    'payout_ref' => $transfer->payout_ref,
+                    'payout_status' => $transfer->payout_status,
+                    'status' => $transfer->status
+                ]);
+                
+                return $this->jsonOrRedirect($request, [
+                    'status' => 'already_processed',
+                    'message' => 'Payout already completed successfully',
+                    'transfer_id' => $transfer->id,
+                    'payout_ref' => $transfer->payout_ref
+                ]);
+            }
 
-        $payload = [
-            'amount_ngn_minor' => $transfer->receive_ngn_minor,
-            'bank_code' => $transfer->recipient_bank_code,
-            'account_number' => $transfer->recipient_account_number,
-            'account_name' => $transfer->recipient_account_name,
-            'narration' => 'TexaPay transfer ' . $transfer->id,
-            'reference' => (string) Str::uuid(),
-            'name_enquiry_reference' => session('transfer.name_enquiry_reference'),
-            'debit_account_number' => env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER'),
-        ];
+            // Check if payout is already in progress (within the last 15 minutes)
+            if ($transfer->payout_status === 'processing' && 
+                $transfer->payout_attempted_at > now()->subMinutes(15)) {
+                Log::info('Payout already in progress', [
+                    'transfer_id' => $transfer->id,
+                    'last_attempt' => $transfer->payout_attempted_at,
+                    'payout_ref' => $transfer->payout_ref
+                ]);
+                
+                return $this->jsonOrRedirect($request, [
+                    'status' => 'in_progress',
+                    'message' => 'Payout is already being processed',
+                    'transfer_id' => $transfer->id,
+                    'last_attempt' => $transfer->payout_attempted_at
+                ]);
+            }
 
-        $resp = $safeHaven->payout($payload);
-
-        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
-        $timeline[] = ['state' => 'ngn_payout_initiated', 'at' => now()->toIso8601String()];
-
-        $transfer->update([
-            'payout_ref' => $resp['ref'],
-            'payout_status' => $resp['status'],
-            'payout_initiated_at' => now(),
-            'status' => $resp['status'] === 'success' ? 'payout_success' : ($resp['status'] === 'failed' ? 'failed' : 'payout_pending'),
-            'timeline' => $timeline,
-        ]);
-
-        if ($resp['status'] === 'success') {
+            // Generate idempotency key if not exists
+            $idempotencyKey = $transfer->payout_idempotency_key ?? (string) Str::uuid();
+            
+            // Update transfer with processing status
             $transfer->update([
-                'payout_completed_at' => now(),
+                'payout_idempotency_key' => $idempotencyKey,
+                'payout_status' => 'processing',
+                'payout_attempted_at' => now(),
+                'last_payout_error' => null,
+                'payout_initiated_at' => now()
             ]);
-            $timeline[] = ['state' => 'ngn_payout_success', 'at' => now()->toIso8601String()];
-            $transfer->update(['timeline' => $timeline]);
-            return redirect()->route('transfer.receipt', $transfer)->with('info', 'NGN payout completed.');
-        }
 
-        if ($resp['status'] === 'failed') {
-            return redirect()->route('transfer.receipt', $transfer)->with('error', 'NGN payout failed.');
-        }
+            try {
+                // Verify the transfer hasn't been processed by another request
+                if ($transfer->payout_status === 'success') {
+                    Log::warning('Race condition detected: payout already completed in another process', [
+                        'transfer_id' => $transfer->id,
+                        'idempotency_key' => $idempotencyKey
+                    ]);
+                    
+                    return $this->jsonOrRedirect($request, [
+                        'status' => 'already_processed',
+                        'message' => 'Payout already completed in another process',
+                        'transfer_id' => $transfer->id,
+                        'payout_ref' => $transfer->payout_ref
+                    ]);
+                }
 
-        return redirect()->route('transfer.receipt', $transfer)->with('info', 'NGN payout pending.');
+                // Prepare the payout payload
+                $payload = [
+                    'amount_ngn_minor' => $transfer->receive_ngn_minor,
+                    'bank_code' => $transfer->recipient_bank_code,
+                    'account_number' => $transfer->recipient_account_number,
+                    'account_name' => $transfer->recipient_account_name,
+                    'narration' => 'TexaPay transfer ' . $transfer->id,
+                    'reference' => $idempotencyKey,
+                    'name_enquiry_reference' => $transfer->name_enquiry_reference,
+                    'debit_account_number' => env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER'),
+                ];
+
+                // Log the payout attempt
+                Log::info('Initiating payout', [
+                    'transfer_id' => $transfer->id,
+                    'idempotency_key' => $idempotencyKey,
+                    'amount_ngn_minor' => $payload['amount_ngn_minor'],
+                    'bank_code' => $payload['bank_code'],
+                    'account_number' => substr($payload['account_number'], 0, 3) . '...' . substr($payload['account_number'], -3)
+                ]);
+
+                // Initiate the payout
+                $resp = $safeHaven->payout($payload);
+                
+                // Log the response
+                Log::debug('Payout response', [
+                    'transfer_id' => $transfer->id,
+                    'status' => $resp['status'],
+                    'reference' => $resp['ref'] ?? null,
+                    'raw_response' => $resp['raw'] ?? null
+                ]);
+                
+                // Prepare timeline update
+                $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+                $timeline[] = [
+                    'state' => 'ngn_payout_initiated',
+                    'at' => now()->toIso8601String(),
+                    'reference' => $idempotencyKey,
+                    'provider_response' => $resp['raw'] ?? null
+                ];
+
+                // Determine the new status based on the response
+                $payoutStatus = $resp['status'] ?? 'failed';
+                $newStatus = match($payoutStatus) {
+                    'success' => 'payout_success',
+                    'failed' => 'failed',
+                    default => 'payout_pending'
+                };
+
+                // Prepare update data
+                $updateData = [
+                    'payout_ref' => $resp['ref'] ?? $transfer->payout_ref,
+                    'payout_status' => $payoutStatus,
+                    'status' => $newStatus,
+                    'timeline' => $timeline,
+                    'payout_attempted_at' => now()
+                ];
+
+                // If successful, mark as completed
+                if ($payoutStatus === 'success') {
+                    $updateData['payout_completed_at'] = now();
+                    $timeline[] = [
+                        'state' => 'ngn_payout_success',
+                        'at' => now()->toIso8601String(),
+                        'reference' => $resp['ref'] ?? null
+                    ];
+                    $updateData['timeline'] = $timeline;
+                    
+                    Log::info('Payout completed successfully', [
+                        'transfer_id' => $transfer->id,
+                        'idempotency_key' => $idempotencyKey,
+                        'payout_ref' => $updateData['payout_ref']
+                    ]);
+                } else if ($payoutStatus === 'failed') {
+                    $errorMsg = $resp['raw']['message'] ?? 'Unknown error';
+                    $updateData['last_payout_error'] = $errorMsg;
+                    
+                    // Add detailed error to timeline
+                    $timeline[] = [
+                        'state' => 'ngn_payout_failed',
+                        'at' => now()->toIso8601String(),
+                        'error' => $errorMsg,
+                        'response' => $resp['raw'] ?? null
+                    ];
+                    $updateData['timeline'] = $timeline;
+                    
+                    Log::error('Payout failed', [
+                        'transfer_id' => $transfer->id,
+                        'idempotency_key' => $idempotencyKey,
+                        'error' => $errorMsg,
+                        'response' => $resp['raw'] ?? null
+                    ]);
+                    
+                    // If payin was successful but payout failed, initiate refund
+                    if ($transfer->payin_status === 'success') {
+                        $this->initiateRefund($transfer, $refundService, [
+                            'error' => $errorMsg,
+                            'response' => $resp['raw'] ?? null
+                        ]);
+                    }
+                    
+                    // Throw exception to trigger rollback
+                    throw new \Exception("Payout failed: " . $errorMsg);
+                }
+
+                // Update the transfer
+                $transfer->update($updateData);
+
+                // Return appropriate response
+                return match($payoutStatus) {
+                    'success' => $this->jsonOrRedirect($request, [
+                        'status' => 'success',
+                        'message' => 'NGN payout completed successfully.',
+                        'transfer_id' => $transfer->id,
+                        'payout_ref' => $transfer->payout_ref
+                    ]),
+                    'failed' => $this->jsonOrRedirect($request, [
+                        'status' => 'error',
+                        'message' => 'NGN payout failed: ' . ($resp['raw']['message'] ?? 'Unknown error'),
+                        'transfer_id' => $transfer->id,
+                        'error_details' => $resp['raw'] ?? null
+                    ], 400),
+                    default => $this->jsonOrRedirect($request, [
+                        'status' => 'pending',
+                        'message' => 'NGN payout is being processed.',
+                        'transfer_id' => $transfer->id,
+                        'payout_ref' => $transfer->payout_ref
+                    ])
+                };
+
+            } catch (\Exception $e) {
+                // Log the full exception for debugging
+                Log::error("Payout processing failed for transfer {$transfer->id}", [
+                    'idempotency_key' => $idempotencyKey ?? null,
+                    'exception' => [
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'trace' => $e->getTraceAsString()
+                    ],
+                    'transfer_status' => $transfer->status,
+                    'payout_status' => $transfer->payout_status,
+                    'payout_ref' => $transfer->payout_ref
+                ]);
+
+                // Update transfer with error status
+                $transfer->update([
+                    'payout_status' => 'failed',
+                    'last_payout_error' => $e->getMessage(),
+                    'payout_attempted_at' => now(),
+                    'timeline' => array_merge($transfer->timeline ?? [], [[
+                        'state' => 'ngn_payout_error',
+                        'at' => now()->toIso8601String(),
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]])
+                ]);
+
+                // Re-throw to trigger transaction rollback
+                throw $e;
+            }
+        });
     }
 
-    public function payoutStatus(Request $request, Transfer $transfer, SafeHaven $safeHaven): RedirectResponse
+    /**
+     * Helper method to return JSON or redirect response based on request type
+     */
+    /**
+     * Initiate a refund for a failed payout
+     */
+    private function initiateRefund(Transfer $transfer, RefundService $refundService, array $errorDetails = [])
+    {
+        try {
+            // Only attempt refund if the transfer is eligible
+            if (!$transfer->isEligibleForRefund()) {
+                Log::warning('Transfer not eligible for refund', [
+                    'transfer_id' => $transfer->id,
+                    'payin_status' => $transfer->payin_status,
+                    'payout_status' => $transfer->payout_status,
+                    'refund_status' => $transfer->refund_status
+                ]);
+                return null;
+            }
+
+            Log::info('Initiating refund for failed payout', [
+                'transfer_id' => $transfer->id,
+                'amount' => $transfer->amount_xaf,
+                'currency' => 'XAF',
+                'error_details' => $errorDetails
+            ]);
+
+            // Call the refund service
+            $refundResult = $refundService->refundFailedPayout($transfer);
+            
+            // Log the result
+            if ($refundResult['success']) {
+                Log::info('Refund initiated successfully', [
+                    'transfer_id' => $transfer->id,
+                    'refund_id' => $refundResult['refund_id']
+                ]);
+            } else {
+                Log::error('Failed to initiate refund', [
+                    'transfer_id' => $transfer->id,
+                    'error' => $refundResult['message'] ?? 'Unknown error'
+                ]);
+            }
+            
+            return $refundResult;
+            
+        } catch (\Exception $e) {
+            Log::error('Exception while initiating refund', [
+                'transfer_id' => $transfer->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'message' => 'Exception: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    private function jsonOrRedirect(Request $request, array $data, int $status = 200)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json($data, $status);
+        }
+
+        $method = $status >= 400 ? 'error' : 'info';
+        return redirect()
+            ->route('transfer.receipt', ['transfer' => $request->route('transfer')])
+            ->with($method, $data['message']);
+    }
+
+    public function payoutStatus(Request $request, Transfer $transfer, SafeHaven $safeHaven)
     {
         if (!$transfer->payout_ref && !$transfer->name_enquiry_reference) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'No payout session to check.'], 400);
+            }
             return back()->with('error', 'No payout session to check.');
         }
+        
         $sessionId = $transfer->payout_ref ?: $transfer->name_enquiry_reference;
         $resp = $safeHaven->payoutStatus($sessionId);
+        
         $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
-        $timeline[] = ['state' => 'ngn_payout_status_check', 'at' => now()->toIso8601String(), 'status' => $resp['status']];
-
-        $update = [
-            'timeline' => $timeline,
+        $timeline[] = [
+            'state' => 'ngn_payout_status_check', 
+            'at' => now()->toIso8601String(), 
+            'status' => $resp['status']
         ];
+
+        $update = ['timeline' => $timeline];
+        
         if ($resp['status'] === 'success') {
             $update['status'] = 'payout_success';
             $update['payout_status'] = 'success';
             $update['payout_completed_at'] = now();
+            $message = 'Payout completed successfully';
         } elseif ($resp['status'] === 'failed') {
             $update['status'] = 'failed';
             $update['payout_status'] = 'failed';
+            $message = 'Payout failed';
         } else {
             $update['payout_status'] = 'pending';
+            $message = 'Payout is still pending';
         }
+        
         $transfer->update($update);
-        return redirect()->route('transfer.receipt', $transfer)->with('info', 'Payout status: ' . $resp['status']);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'status' => $resp['status'],
+                'message' => $message,
+                'transfer_status' => $update['status'] ?? $transfer->status,
+                'redirect' => $resp['status'] !== 'pending' ? route('transfer.receipt', $transfer) : null,
+            ]);
+        }
+        
+        return redirect()
+            ->route('transfer.receipt', $transfer)
+            ->with('info', 'Payout status: ' . $resp['status']);
     }
 }

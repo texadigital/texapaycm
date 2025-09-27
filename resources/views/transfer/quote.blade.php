@@ -82,18 +82,55 @@
     var remaining = {{ (int) ($remaining ?? 0) }};
     var el = document.getElementById('countdown');
     var btn = document.getElementById('confirmBtn');
+    var refreshTimeout = null;
+    
     if (!el) return;
-    var t = setInterval(function(){
-        if (remaining <= 0){
+    
+    var updateCountdown = function() {
+        if (remaining <= 0) {
             clearInterval(t);
             if (el) el.textContent = '0';
             if (btn) btn.disabled = true;
+            
+            // Schedule page refresh after showing expiration for 2 seconds
+            if (!refreshTimeout) {
+                refreshTimeout = setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            }
             return;
         }
+        
         remaining -= 1;
         if (el) el.textContent = remaining;
-        if (remaining <= 0 && btn){ btn.disabled = true; }
-    }, 1000);
+        if (remaining <= 0 && btn) { 
+            btn.disabled = true; 
+        }
+    };
+    
+    // Initial update
+    updateCountdown();
+    
+    // Update every second
+    var t = setInterval(updateCountdown, 1000);
+    
+    // Also check for server-side expiration
+    var checkExpiration = function() {
+        fetch(window.location.href, {
+            method: 'HEAD',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        }).then(function(response) {
+            if (response.redirected) {
+                window.location.reload();
+            }
+        });
+    };
+    
+    // Check expiration every 10 seconds
+    var expirationCheck = setInterval(checkExpiration, 10000);
 })();
 </script>
 </body>

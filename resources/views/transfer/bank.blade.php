@@ -15,10 +15,58 @@
         p.muted { color: #9aa3b2; margin-top: 4px; }
         form { margin-top: 20px; display: grid; gap: 14px; }
         label { font-size: 13px; color: #c9d4e5; }
-        input, select { width: 100%; padding: 12px 12px; background: #0e1430; color: #e6e8ec; border: 1px solid #1c2347; border-radius: 10px; font-size: 14px; }
+        input, select { 
+            width: 100%; 
+            padding: 12px 12px; 
+            background: #0e1430; 
+            color: #e6e8ec; 
+            border: 1px solid #1c2347; 
+            border-radius: 10px; 
+            font-size: 14px; 
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input.error, select.error {
+            border-color: #f87171;
+            box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2);
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+        }
         .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        .btn { background: #f59e0b; color: #1a1b2e; padding: 12px 14px; border-radius: 10px; font-weight: 600; border: none; cursor: pointer; }
-        .btn:hover { background: #f7b23a; }
+        .btn { 
+            background: #f59e0b; 
+            color: #1a1b2e; 
+            padding: 12px 14px; 
+            border-radius: 10px; 
+            font-weight: 600; 
+            border: none; 
+            cursor: pointer; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+        }
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) { 
+            background: #f7b23a; 
+        }
+        .loading-spinner {
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
         .alert { padding: 10px 12px; border-radius: 10px; font-size: 14px; }
         .alert-error { background: #2c1430; color: #ffd6e7; border: 1px solid #5d264d; }
 
@@ -51,28 +99,62 @@
         <div class="alert alert-error">{{ session('transfer.error') }}</div>
     @endif
 
-    <form method="post" action="{{ route('transfer.bank.verify') }}">
+    <form id="bankVerificationForm" method="post" action="{{ route('transfer.bank.verify') }}" novalidate>
         @csrf
         <div class="row">
             <div>
                 <label for="account_number">Account Number</label>
-                <input type="text" id="account_number" name="account_number" placeholder="10-digit NGN account" value="{{ old('account_number', $account_number) }}" required />
+                <input type="text" 
+                       id="account_number" 
+                       name="account_number" 
+                       placeholder="10-digit NGN account" 
+                       value="{{ old('account_number', $account_number) }}" 
+                       required 
+                       pattern="\d{10}"
+                       maxlength="10"
+                       oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10)"
+                       aria-describedby="account_hint account_error"
+                       class="{{ $errors->has('account_number') ? 'error' : '' }}" />
                 <div class="hint" id="account_hint">Enter 10-digit account to auto-suggest banks.</div>
+                @error('account_number')
+                    <div id="account_error" class="error-message" style="color: #ef4444; font-size: 0.875rem; margin-top: 0.25rem;">
+                        {{ $message }}
+                    </div>
+                @enderror
             </div>
             <div>
-                <label>Bank</label>
-                <div class="selector" id="bank_selector">
+                <label for="bank_selector">Bank</label>
+                <div class="selector" id="bank_selector" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="bank_sheet">
                     <div>
                         <div class="label">Selected Bank</div>
-                        <div class="value" id="bank_selected_value">None</div>
+                        <div class="value" id="bank_selected_value">{{ old('bank_name', $bank_name) ?: 'Select Bank' }}</div>
                     </div>
                     <div>▼</div>
                 </div>
-                <input type="hidden" id="bank_code" name="bank_code" value="{{ old('bank_code', $bank_code) }}" />
+                <input type="hidden" 
+                       id="bank_code" 
+                       name="bank_code" 
+                       value="{{ old('bank_code', $bank_code) }}" 
+                       required 
+                       aria-describedby="bank_error" />
+                @error('bank_code')
+                    <div id="bank_error" class="error-message" style="color: #ef4444; font-size: 0.875rem; margin-top: 0.25rem;">
+                        {{ $message }}
+                    </div>
+                @enderror
                 <div id="suggestions" class="hint" style="margin-top:6px;"></div>
             </div>
         </div>
-        <button class="btn" type="submit">Verify Account Name</button>
+        <button class="btn" type="submit" id="submitButton" style="position: relative;">
+            <span class="button-text">Verify Account Name</span>
+            <span class="loading-spinner" style="display: none; align-items: center; gap: 8px;">
+                <svg class="animate-spin" style="width: 16px; height: 16px;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Verifying...
+            </span>
+        </button>
     </form>
 
     @if($account_name)
@@ -107,13 +189,17 @@
 
 <script>
 (function(){
+  // Utility functions
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  
+  // API endpoints
   const suggestUrl = '/api/banks/suggest';
   const banksUrl = '/api/banks';
   const favoritesUrl = '/api/banks/favorites';
 
+  // DOM elements
   const accountInput = $('#account_number');
   const hint = $('#account_hint');
   const suggestions = $('#suggestions');
@@ -121,83 +207,207 @@
   const bankValue = $('#bank_selected_value');
   const bankSelector = $('#bank_selector');
 
+  // Sheet elements
   const sheet = $('#bank_sheet');
   const backdrop = $('#sheet_backdrop');
   const search = $('#bank_search');
   const listAll = $('#bank_all');
   const listRecent = $('#bank_recent');
   const sheetStatus = $('#sheet_status');
+  const sheetClose = $('#sheet_close');
 
+  // State
   let banks = [];
   let recent = [];
   let banksLoaded = false;
+  let isLoading = false;
 
-  function openSheet(){
+  // Sheet management
+  function openSheet() {
     backdrop.style.display = 'block';
-    requestAnimationFrame(()=>{ sheet.classList.add('open'); });
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => { 
+      sheet.classList.add('open');
+    });
   }
-  function closeSheet(){
+
+  function closeSheet() {
     sheet.classList.remove('open');
     backdrop.style.display = 'none';
+    document.body.style.overflow = '';
+    search.value = ''; // Clear search on close
   }
-  $('#sheet_close').addEventListener('click', closeSheet);
+
+  // Event listeners for sheet
+  sheetClose.addEventListener('click', closeSheet);
   backdrop.addEventListener('click', closeSheet);
-  bankSelector.addEventListener('click', async ()=>{
-    await ensureBanks();
-    renderBanks(banks);
-    renderRecent(recent);
-    openSheet();
-    search.focus();
+  
+  // Prevent sheet from closing when clicking inside it
+  sheet.addEventListener('click', (e) => {
+    e.stopPropagation();
   });
 
-  function setSelected(bank){
-    if(!bank) return;
-    hiddenBankCode.value = bank.bankCode || '';
-    bankValue.textContent = bank.name || bank.bankCode || 'None';
-    // Show as chip in suggestions area
-    suggestions.innerHTML = '';
-    closeSheet();
-  }
-
-  function bankItemHTML(b){
-    const code = b.bankCode || '';
-    const name = b.name || code;
-    return `<div class="bank-item" data-code="${code}" data-name="${name}">${name}${code?` <span class=\"hint\">(${code})</span>`:''}</div>`;
-  }
-  function renderBanks(list){
-    listAll.innerHTML = list.map(bankItemHTML).join('');
-    listAll.querySelectorAll('.bank-item').forEach(el=>{
-      el.addEventListener('click', ()=>{
-        setSelected({ bankCode: el.dataset.code, name: el.dataset.name });
-      });
-    });
-  }
-  function renderRecent(list){
-    if(!list || list.length===0){ listRecent.innerHTML = '<div class="hint">No recent banks yet.</div>'; return; }
-    listRecent.innerHTML = list.map(bankItemHTML).join('');
-    listRecent.querySelectorAll('.bank-item').forEach(el=>{
-      el.addEventListener('click', ()=>{
-        setSelected({ bankCode: el.dataset.code, name: el.dataset.name });
-      });
-    });
-  }
-
-  async function ensureBanks(){
-    if(banksLoaded){ return; }
-    // Try localStorage cache
-    const cached = localStorage.getItem('banks_cache');
-    if(cached){
-      try {
-        const obj = JSON.parse(cached);
-        if(obj && Array.isArray(obj.banks) && (Date.now() - obj.time) < 24*60*60*1000){
-          banks = obj.banks; banksLoaded = true;
-        }
-      } catch(_){}
+  // Open bank selector
+  bankSelector.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (isLoading) return;
+    
+    try {
+      isLoading = true;
+      sheetStatus.textContent = 'Loading banks...';
+      await ensureBanks();
+      renderBanks(banks);
+      renderRecent(recent);
+      openSheet();
+      search.focus();
+    } catch (error) {
+      console.error('Error loading banks:', error);
+      sheetStatus.textContent = 'Failed to load banks. Please try again.';
+    } finally {
+      isLoading = false;
     }
-    if(!banksLoaded){
-      const res = await fetch(banksUrl);
-      const json = await res.json();
-      banks = json.banks || [];
+  });
+
+  // Bank selection
+  function setSelected(bank) {
+    if (!bank) return;
+    
+    // Update form fields
+    hiddenBankCode.value = bank.bankCode || '';
+    bankValue.textContent = bank.name || bank.bankCode || 'Select Bank';
+    
+    // Clear any previous suggestions
+    suggestions.innerHTML = '';
+    
+    // Add to recent banks if not already there
+    const bankExists = recent.some(b => b.bankCode === bank.bankCode);
+    if (!bankExists) {
+      recent.unshift({ bankCode: bank.bankCode, name: bank.name });
+      recent = recent.slice(0, 5); // Keep only 5 most recent
+      localStorage.setItem('recent_banks', JSON.stringify(recent));
+    }
+    
+    closeSheet();
+    
+    // If account number is entered, trigger account verification
+    if (accountInput.value.trim().length >= 10) {
+      onAccountChange();
+    }
+  }
+
+  // Generate HTML for a bank item
+  function bankItemHTML(bank) {
+    const code = bank.bankCode || '';
+    const name = bank.name || code;
+    return `
+      <div class="bank-item" data-code="${code}" data-name="${name}">
+        ${name}
+        ${code ? `<span class="hint">(${code})</span>` : ''}
+      </div>`;
+  }
+
+  // Render bank list
+  function renderBanks(list) {
+    if (!list || !list.length) {
+      listAll.innerHTML = '<div class="hint">No banks found</div>';
+      return;
+    }
+    
+    listAll.innerHTML = list.map(bankItemHTML).join('');
+    
+    // Add click handlers to bank items
+    listAll.querySelectorAll('.bank-item').forEach(el => {
+      el.addEventListener('click', () => {
+        setSelected({ 
+          bankCode: el.dataset.code, 
+          name: el.dataset.name 
+        });
+      });
+    });
+  }
+
+  // Render recent banks
+  function renderRecent(list) {
+    if (!list || list.length === 0) { 
+      listRecent.innerHTML = '<div class="hint">No recent banks</div>'; 
+      return; 
+    }
+    
+    listRecent.innerHTML = list.map(bankItemHTML).join('');
+    
+    // Add click handlers to recent bank items
+    listRecent.querySelectorAll('.bank-item').forEach(el => {
+      el.addEventListener('click', () => {
+        setSelected({ 
+          bankCode: el.dataset.code, 
+          name: el.dataset.name 
+        });
+      });
+    });
+  }
+
+  // Load banks from API or cache
+  async function ensureBanks() {
+    if (banksLoaded) return;
+    
+    // Try to load from localStorage cache first
+    try {
+      const cached = localStorage.getItem('banks_cache');
+      if (cached) {
+        const { banks: cachedBanks, timestamp } = JSON.parse(cached);
+        const cacheAge = Date.now() - (timestamp || 0);
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        
+        if (cachedBanks && Array.isArray(cachedBanks) && cacheAge < maxAge) {
+          banks = cachedBanks;
+          banksLoaded = true;
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load banks from cache:', error);
+    }
+    
+    // Load from API
+    try {
+      sheetStatus.textContent = 'Loading bank list...';
+      const response = await fetch(banksUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      banks = data.banks || [];
+      banksLoaded = true;
+      
+      // Cache the result
+      localStorage.setItem('banks_cache', JSON.stringify({
+        banks,
+        timestamp: Date.now()
+      }));
+      
+      // Load recent banks
+      try {
+        const recentBanks = localStorage.getItem('recent_banks');
+        if (recentBanks) {
+          recent = JSON.parse(recentBanks);
+        }
+      } catch (e) {
+        console.warn('Failed to load recent banks:', e);
+      }
+      
+      sheetStatus.textContent = '';
+    } catch (error) {
+      console.error('Failed to load banks:', error);
+      sheetStatus.textContent = 'Failed to load bank list. Please try again.';
+      throw error;
+    }
       localStorage.setItem('banks_cache', JSON.stringify({ time: Date.now(), banks }));
       banksLoaded = true;
     }
@@ -217,14 +427,306 @@
     renderBanks(filtered);
   });
 
-  // Debounce helper
-  function debounce(fn, ms){ let t; return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), ms); }; }
+  // Form elements
+  const form = document.getElementById('bankVerificationForm');
+  const submitButton = document.getElementById('submitButton');
+  const buttonText = submitButton?.querySelector('.button-text') || submitButton;
+  const loadingSpinner = submitButton?.querySelector('.loading-spinner');
+  const accountInput = document.getElementById('account_number');
+  const hiddenBankCode = document.getElementById('bank_code');
 
-  const onAccountChange = debounce(async function(){
-    const acct = accountInput.value.replace(/\D+/g,'');
-    if(acct.length !== 10){
+  // Show form errors
+  function showFormError(field, message) {
+    let errorElement = document.getElementById(`${field}_error`);
+    
+    if (!errorElement) {
+      errorElement = document.createElement('div');
+      errorElement.id = `${field}_error`;
+      errorElement.className = 'error-message';
+      errorElement.style.color = '#f87171';
+      errorElement.style.fontSize = '0.875rem';
+      errorElement.style.marginTop = '0.25rem';
+      
+      const input = document.getElementById(field) || 
+                   document.querySelector(`[name="${field}"]`);
+      if (input) {
+        input.classList.add('error');
+        input.insertAdjacentElement('afterend', errorElement);
+      }
+    }
+    
+    errorElement.textContent = message;
+    errorElement.style.display = 'block';
+    return errorElement;
+  }
+
+  // Clear form errors
+  function clearFormError(field) {
+    const errorElement = document.getElementById(`${field}_error`);
+    const input = document.getElementById(field) || 
+                 document.querySelector(`[name="${field}"]`);
+    
+    if (errorElement) {
+      errorElement.remove();
+    }
+    
+    if (input) {
+      input.classList.remove('error');
+    }
+  }
+
+  // Validate form
+  function validateForm() {
+    let isValid = true;
+    const accountNumber = accountInput?.value?.trim() || '';
+    const bankCode = hiddenBankCode?.value?.trim() || '';
+
+    // Validate account number
+    if (accountNumber.length !== 10 || !/^\d{10}$/.test(accountNumber)) {
+      showFormError('account_number', 'Please enter a valid 10-digit account number');
+      isValid = false;
+    } else {
+      clearFormError('account_number');
+    }
+
+    // Validate bank selection
+    if (!bankCode) {
+      showFormError('bank_code', 'Please select a bank');
+      isValid = false;
+    } else {
+      clearFormError('bank_code');
+    }
+
+    return isValid;
+  }
+
+  // Handle form submission
+  // Form submission handler
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      // Validate form
+      let isValid = true;
+      const accountNumber = accountInput?.value?.trim() || '';
+      const bankCode = hiddenBankCode?.value?.trim() || '';
+
+      // Validate account number
+      if (accountNumber.length !== 10 || !/^\d{10}$/.test(accountNumber)) {
+        showFormError('account_number', 'Please enter a valid 10-digit account number');
+        isValid = false;
+      } else {
+        clearFormError('account_number');
+      }
+
+      // Validate bank selection
+      if (!bankCode) {
+        showFormError('bank_code', 'Please select a bank');
+        isValid = false;
+      } else {
+        clearFormError('bank_code');
+      }
+
+      if (!isValid) return;
+
+      // Disable submit button and show loading state
+      if (submitButton) {
+        submitButton.disabled = true;
+        if (buttonText) buttonText.style.display = 'none';
+        if (loadingSpinner) loadingSpinner.style.display = 'inline-flex';
+      }
+
+      try {
+        // Prepare form data
+        const formData = new FormData(form);
+        
+        // Add timestamp to prevent caching
+        formData.append('_t', Date.now());
+        
+        // Submit the form
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrf
+          },
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          // Handle successful response
+          if (data.redirect) {
+            window.location.href = data.redirect;
+          } else {
+            // Handle successful validation without redirect
+            window.location.reload();
+          }
+        } else {
+          // Handle validation errors
+          if (data.errors) {
+            Object.entries(data.errors).forEach(([field, messages]) => {
+              showFormError(field, messages[0]);
+            });
+          } else {
+            // Show general error
+            showFormError('form', data.message || 'An error occurred. Please try again.');
+          }
+        }
+      } catch (error) {
+        console.error('Form submission error:', error);
+        showFormError('form', 'Network error. Please check your connection and try again.');
+      } finally {
+        // Re-enable submit button and hide loading state
+        if (submitButton) {
+          submitButton.disabled = false;
+          if (buttonText) buttonText.style.display = 'inline';
+          if (loadingSpinner) loadingSpinner.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  // Show form errors
+  function showFormError(field, message) {
+    let errorElement = document.getElementById(`${field}_error`);
+    
+    if (!errorElement) {
+      errorElement = document.createElement('div');
+      errorElement.id = `${field}_error`;
+      errorElement.className = 'error-message';
+      errorElement.style.color = '#f87171';
+      errorElement.style.fontSize = '0.875rem';
+      errorElement.style.marginTop = '0.25rem';
+      
+      const input = document.getElementById(field) || 
+                   document.querySelector(`[name="${field}"]`);
+      if (input) {
+        input.classList.add('error');
+        input.insertAdjacentElement('afterend', errorElement);
+      }
+    }
+    
+    errorElement.textContent = message;
+    errorElement.style.display = 'block';
+    return errorElement;
+  }
+
+  // Clear form errors
+  function clearFormError(field) {
+    const errorElement = document.getElementById(`${field}_error`);
+    const input = document.getElementById(field) || 
+                 document.querySelector(`[name="${field}"]`);
+    
+    if (errorElement) {
+      errorElement.remove();
+    }
+    
+    if (input) {
+      input.classList.remove('error');
+    }
+  }
+
+  // Validate form
+  function validateForm() {
+    let isValid = true;
+    const accountNumber = accountInput.value.trim();
+    const bankCode = hiddenBankCode.value.trim();
+
+    // Validate account number
+    if (accountNumber.length !== 10 || !/^\d{10}$/.test(accountNumber)) {
+      showFormError('account_number', 'Please enter a valid 10-digit account number');
+      isValid = false;
+    } else {
+      clearFormError('account_number');
+    }
+
+    // Validate bank selection
+    if (!bankCode) {
+      showFormError('bank_code', 'Please select a bank');
+      isValid = false;
+    } else {
+      clearFormError('bank_code');
+    }
+
+    return isValid;
+  }
+
+  // Handle form submission
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    // Disable submit button and show loading state
+    submitButton.disabled = true;
+    buttonText.style.display = 'none';
+    loadingSpinner.style.display = 'inline-flex';
+
+    try {
+      // Prepare form data
+      const formData = new FormData(form);
+      
+      // Add timestamp to prevent caching
+      formData.append('_t', Date.now());
+      
+      // Submit the form
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': csrf
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Handle successful response
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        } else {
+          // Handle successful validation without redirect
+          window.location.reload();
+        }
+      } else {
+        // Handle validation errors
+        if (data.errors) {
+          Object.entries(data.errors).forEach(([field, messages]) => {
+            showFormError(field, messages[0]);
+          });
+        } else {
+          // Show general error
+          showFormError('form', data.message || 'An error occurred. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      showFormError('form', 'Network error. Please check your connection and try again.');
+    } finally {
+      // Re-enable submit button and hide loading state
+      submitButton.disabled = false;
+      buttonText.style.display = 'inline';
+      loadingSpinner.style.display = 'none';
+    }
+  });
+
+  // Handle account number input
+  const onAccountChange = debounce(async function() {
+    const acct = accountInput.value.replace(/\D+/g, '');
+    
+    // Validate account number
+    if (acct.length !== 10) {
       hint.textContent = 'Enter 10-digit account to auto-suggest banks.';
       suggestions.innerHTML = '';
+      return;
+    }
       return;
     }
     hint.textContent = 'Looking up banks…';

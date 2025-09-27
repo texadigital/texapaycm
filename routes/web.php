@@ -6,7 +6,7 @@ Route::get('/', function () {
     return redirect()->route('transfer.bank');
 });
 
-Route::prefix('transfer')->group(function () {
+Route::middleware('auth')->prefix('transfer')->group(function () {
     Route::get('/bank', [\App\Http\Controllers\TransferController::class, 'showBankForm'])->name('transfer.bank');
     Route::post('/bank/verify', [\App\Http\Controllers\TransferController::class, 'verifyBank'])->name('transfer.bank.verify');
 
@@ -18,6 +18,17 @@ Route::prefix('transfer')->group(function () {
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
     Route::post('/{transfer}/payout/status', [\App\Http\Controllers\TransferController::class, 'payoutStatus'])->name('transfer.payout.status');
+});
+
+// Auth + Dashboard
+Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
+Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register'])->name('register');
+Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
+Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
+Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/account/delete', [\App\Http\Controllers\AuthController::class, 'deleteAccount'])->name('account.delete');
 });
 
 // Webhooks
