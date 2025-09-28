@@ -32,6 +32,7 @@ Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])-
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
+    Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transactions.show');
     Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'export'])->name('transactions.export');
     
     // Profile routes
@@ -39,6 +40,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
         Route::get('/limits', [\App\Http\Controllers\ProfileController::class, 'limits'])->name('profile.limits');
     });
+    
+    // Account management
+    Route::post('/account/delete', [\App\Http\Controllers\ProfileController::class, 'deleteAccount'])->name('account.delete');
 });
 
 // Webhooks

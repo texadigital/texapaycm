@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\LimitCheckService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class ProfileController extends Controller
 {
@@ -41,5 +42,37 @@ class ProfileController extends Controller
             'userStats30Days',
             'userStats90Days'
         ));
+    }
+
+    public function deleteAccount(Request $request)
+    {
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
+        $user = $request->user();
+
+        // Verify password
+        if (!Hash::check($request->password, $user->password)) {
+            return redirect()->back()
+                ->withErrors(['password' => 'The provided password is incorrect.'])
+                ->withInput();
+        }
+
+        // Log the account deletion
+        \Log::info('User account deletion initiated', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        // Logout the user
+        auth()->logout();
+
+        // Delete the user (this will cascade delete related records due to foreign key constraints)
+        $user->delete();
+
+        // Redirect to home with success message
+        return redirect()->route('login.show')
+            ->with('success', 'Your account has been successfully deleted.');
     }
 }

@@ -195,14 +195,6 @@
       </tbody>
     </table>
 
-    
-
-    <form method="post" action="{{ route('account.delete') }}" onsubmit="return confirm('Delete your account? This cannot be undone.');" style="margin-top:24px">
-      @csrf
-      <label for="password">Confirm password to delete account</label>
-      <input id="password" name="password" type="password" required />
-      <button class="btn btn-danger" type="submit">Delete account</button>
-    </form>
   </div>
 </body>
 </html>
