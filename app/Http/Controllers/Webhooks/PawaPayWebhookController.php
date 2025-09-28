@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webhooks;
 use App\Http\Controllers\Controller;
 use App\Models\Transfer;
 use App\Services\SafeHaven;
+use App\Services\LimitCheckService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -61,6 +62,17 @@ class PawaPayWebhookController extends Controller
             'status' => 'payout_pending',
             'payin_at' => now(),
             'timeline' => $timeline
+        ]);
+
+        // Record successful transaction in limits system
+        $limitCheckService = app(LimitCheckService::class);
+        $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+
+        Log::info('Transaction recorded in limits system', [
+            'transfer_id' => $transfer->id,
+            'user_id' => $transfer->user_id,
+            'amount' => $transfer->amount_xaf,
+            'successful' => true
         ]);
 
         // Initiate payout to recipient

@@ -290,9 +290,8 @@ class TransferController extends Controller
                 ->with('info', 'A transaction with this quote already exists.');
         }
 
-        // Record transaction in limits system
-        $limitCheckService = app(LimitCheckService::class);
-        $limitCheckService->recordTransaction(auth()->user(), $quote->amount_xaf, false);
+        // Note: Transaction will be recorded in limits system only when it succeeds
+        // This happens via webhook callbacks when payment status changes to success
 
         // Generate a unique reference for this transaction
         $reference = (string) Str::uuid();
