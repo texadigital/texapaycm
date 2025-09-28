@@ -230,13 +230,11 @@ class TransferController extends Controller
         }
 
         // Start a database transaction to ensure data consistency
-        return DB::transaction(function () use ($quote, $msisdn, $provider) {
+        $transfer = DB::transaction(function () use ($quote, $msisdn, $provider) {
             // Check if a transfer with this quote already exists
             $existingTransfer = Transfer::where('quote_id', $quote->id)->first();
             if ($existingTransfer) {
-                return redirect()
-                    ->route('transfer.receipt', $existingTransfer)
-                    ->with('info', 'A transaction with this quote already exists.');
+                return $existingTransfer;
             }
 
             // Get the authenticated user or fallback to system user
@@ -278,6 +276,13 @@ class TransferController extends Controller
 
             return $transfer;
         });
+
+        // Check if this transfer already existed
+        if (Transfer::where('quote_id', $quote->id)->where('id', '!=', $transfer->id)->exists()) {
+            return redirect()
+                ->route('transfer.receipt', $transfer)
+                ->with('info', 'A transaction with this quote already exists.');
+        }
 
         // Generate a unique reference for this transaction
         $reference = (string) Str::uuid();
