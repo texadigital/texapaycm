@@ -11,9 +11,13 @@ Route::middleware('auth')->prefix('transfer')->group(function () {
     Route::post('/bank/verify', [\App\Http\Controllers\TransferController::class, 'verifyBank'])->name('transfer.bank.verify');
 
     Route::get('/quote', [\App\Http\Controllers\TransferController::class, 'showQuoteForm'])->name('transfer.quote');
-    Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])->name('transfer.quote.create');
+    Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
+        ->middleware('check.limits')
+        ->name('transfer.quote.create');
 
-    Route::post('/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
+    Route::post('/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])
+        ->middleware('check.limits')
+        ->name('transfer.confirm');
 
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
