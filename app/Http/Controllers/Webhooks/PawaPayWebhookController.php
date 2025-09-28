@@ -64,16 +64,8 @@ class PawaPayWebhookController extends Controller
             'timeline' => $timeline
         ]);
 
-        // Record successful transaction in limits system
-        $limitCheckService = app(LimitCheckService::class);
-        $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
-
-        Log::info('Transaction recorded in limits system', [
-            'transfer_id' => $transfer->id,
-            'user_id' => $transfer->user_id,
-            'amount' => $transfer->amount_xaf,
-            'successful' => true
-        ]);
+        // Note: Transaction will be recorded in limits system only when BOTH payin AND payout succeed
+        // This happens when payout is completed successfully
 
         // Initiate payout to recipient
         $this->initiatePayout($transfer, $timeline, $safeHaven);

@@ -518,8 +518,14 @@ class TransferController extends Controller
                     ];
                     $updateData['timeline'] = $timeline;
                     
-                    Log::info('Payout completed successfully', [
+                    // Record successful transaction in limits system (both payin and payout succeeded)
+                    $limitCheckService = app(LimitCheckService::class);
+                    $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+                    
+                    Log::info('Payout completed successfully and recorded in limits system', [
                         'transfer_id' => $transfer->id,
+                        'user_id' => $transfer->user_id,
+                        'amount' => $transfer->amount_xaf,
                         'idempotency_key' => $idempotencyKey,
                         'payout_ref' => $updateData['payout_ref']
                     ]);
@@ -711,6 +717,18 @@ class TransferController extends Controller
             $update['payout_status'] = 'success';
             $update['payout_completed_at'] = now();
             $message = 'Payout completed successfully';
+            
+            // Record successful transaction in limits system (both payin and payout succeeded)
+            $limitCheckService = app(LimitCheckService::class);
+            $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+            
+            Log::info('Complete transaction recorded in limits system', [
+                'transfer_id' => $transfer->id,
+                'user_id' => $transfer->user_id,
+                'amount' => $transfer->amount_xaf,
+                'payin_status' => $transfer->payin_status,
+                'payout_status' => 'success'
+            ]);
         } elseif ($resp['status'] === 'failed') {
             $update['status'] = 'failed';
             $update['payout_status'] = 'failed';
