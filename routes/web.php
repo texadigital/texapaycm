@@ -92,3 +92,39 @@ Route::get('/health/safehaven/name-enquiry', function () {
     return response()->json($svc->nameEnquiry($bank, $acct));
 });
 
+// Exchange Rates Debug
+Route::get('/health/oxr', function () {
+    /** @var \App\Services\OpenExchangeRates $oxr */
+    $oxr = app(\App\Services\OpenExchangeRates::class);
+    
+    $rates = $oxr->fetchUsdRates();
+    
+    $debug = [
+        'config' => [
+            'base_url' => env('OXR_BASE_URL'),
+            'app_id_set' => !empty(env('OXR_APP_ID')),
+            'fallback' => env('FALLBACK_XAF_TO_NGN'),
+            'cache_ttl' => env('OXR_CACHE_TTL_MINUTES', 60),
+        ],
+        'rates' => $rates,
+        'cross_rate' => null,
+        'sample_quote' => null
+    ];
+    
+    if ($rates['usd_to_xaf'] && $rates['usd_to_ngn']) {
+        $crossRate = $rates['usd_to_ngn'] / $rates['usd_to_xaf'];
+        $debug['cross_rate'] = $crossRate;
+        
+        // Sample quote for 10,000 XAF
+        $amountXaf = 10000;
+        $amountNgn = $amountXaf * $crossRate;
+        $debug['sample_quote'] = [
+            'send_xaf' => $amountXaf,
+            'receive_ngn' => round($amountNgn, 2),
+            'rate' => $crossRate
+        ];
+    }
+    
+    return response()->json($debug);
+});
+

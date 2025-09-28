@@ -52,6 +52,10 @@ class OpenExchangeRates
 
         try {
             $resp = Http::acceptJson()
+                ->withOptions([
+                    'verify' => false, // Disable SSL verification for development
+                    'timeout' => 30,
+                ])
                 ->get($this->baseUrl . '/latest.json', [
                     'app_id' => $this->appId,
                     'base' => 'USD',
