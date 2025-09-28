@@ -18,6 +18,9 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use App\Filament\Widgets\TodaysVolumeWidget;
+use App\Filament\Widgets\NearLimitUsersWidget;
+use App\Filament\Widgets\RecentCriticalUtilizationWidget;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -40,6 +43,9 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
+                TodaysVolumeWidget::class,
+                NearLimitUsersWidget::class,
+                RecentCriticalUtilizationWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

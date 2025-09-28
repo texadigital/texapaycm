@@ -1,12 +1,17 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 
 Route::get('/', function () {
+    // If an admin lands on root, send them to Filament admin
+    if (Auth::check() && (bool) (Auth::user()->is_admin ?? false)) {
+        return redirect('/admin');
+    }
     return redirect()->route('transfer.bank');
 });
 
-Route::middleware('auth')->prefix('transfer')->group(function () {
+Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(function () {
     Route::get('/bank', [\App\Http\Controllers\TransferController::class, 'showBankForm'])->name('transfer.bank');
     Route::post('/bank/verify', [\App\Http\Controllers\TransferController::class, 'verifyBank'])->name('transfer.bank.verify');
 
@@ -14,10 +19,6 @@ Route::middleware('auth')->prefix('transfer')->group(function () {
     Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
         ->middleware('check.limits')
         ->name('transfer.quote.create');
-
-    Route::post('/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])
-        ->middleware('check.limits')
-        ->name('transfer.confirm');
 
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
@@ -29,7 +30,7 @@ Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegis
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
     Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transactions.show');

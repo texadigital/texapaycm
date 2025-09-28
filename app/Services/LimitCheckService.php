@@ -8,6 +8,7 @@ use App\Models\DailyTransactionSummary;
 use App\Models\Transfer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class LimitCheckService
 {
@@ -261,6 +262,43 @@ class LimitCheckService
                 'average_transaction_amount' => 0,
                 'active_days' => 0,
             ];
+        }
+    }
+
+    /**
+     * Record a completed transfer in an idempotent way so it only counts once.
+     * Returns true if this call performed the recording, false if it was already recorded.
+     */
+    public function recordCompletedTransferOnce(Transfer $transfer): bool
+    {
+        try {
+            $cacheKey = 'limits_recorded:transfer:' . $transfer->id;
+
+            // Cache::add returns true only if the key did not exist
+            if (!Cache::add($cacheKey, true, now()->addDays(7))) {
+                Log::info('Limit recording skipped (already recorded)', [
+                    'transfer_id' => $transfer->id,
+                    'user_id' => $transfer->user_id,
+                ]);
+                return false;
+            }
+
+            $this->recordTransaction($transfer->user, (int) $transfer->amount_xaf, true);
+
+            Log::info('Limit recording completed (idempotent)', [
+                'transfer_id' => $transfer->id,
+                'user_id' => $transfer->user_id,
+                'amount' => (int) $transfer->amount_xaf,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error in recordCompletedTransferOnce', [
+                'transfer_id' => $transfer->id,
+                'user_id' => $transfer->user_id,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
         }
     }
 }

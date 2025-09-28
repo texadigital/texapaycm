@@ -62,6 +62,11 @@ class AuthController extends Controller
         }
 
         Auth::login($user, true);
+        // If the user is an admin, send them to the Filament admin panel
+        if ((bool) ($user->is_admin ?? false)) {
+            return redirect('/admin');
+        }
+        // Otherwise, go to the normal user dashboard
         return redirect()->intended(route('dashboard'));
     }
 

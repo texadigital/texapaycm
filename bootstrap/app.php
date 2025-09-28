@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'check.limits' => \App\Http\Middleware\CheckUserLimits::class,
+            'redirect.admins' => \App\Http\Middleware\RedirectAdminsToFilament::class,
         ]);
     })
     ->withProviders([

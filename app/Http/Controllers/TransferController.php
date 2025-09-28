@@ -718,11 +718,11 @@ class TransferController extends Controller
             $update['payout_completed_at'] = now();
             $message = 'Payout completed successfully';
             
-            // Record successful transaction in limits system (both payin and payout succeeded)
+            // Record successful transaction in limits system idempotently
             $limitCheckService = app(LimitCheckService::class);
-            $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+            $limitCheckService->recordCompletedTransferOnce($transfer);
             
-            Log::info('Complete transaction recorded in limits system', [
+            Log::info('Complete transaction recorded in limits system (idempotent)', [
                 'transfer_id' => $transfer->id,
                 'user_id' => $transfer->user_id,
                 'amount' => $transfer->amount_xaf,
