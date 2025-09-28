@@ -15,85 +15,27 @@ class PawaPayWebhookController extends Controller
     public function __invoke(Request $request, SafeHaven $safeHaven)
     {
         $payload = $request->json()->all();
+        $signature = $request->header('X-Signature'); // TODO: verify signature if supported
         Log::info('PawaPay webhook received', ['payload' => $payload]);
 
         $depositId = $payload['depositId'] ?? $payload['id'] ?? null;
-        $status = strtoupper($payload['status'] ?? '');
-        $reference = $payload['reference'] ?? null;
-
         if (!$depositId) {
             Log::warning('PawaPay webhook: Missing deposit ID', ['payload' => $payload]);
             return response()->json(['ok' => false, 'error' => 'Missing deposit ID'], 400);
         }
 
-        // Find the transfer with a lock to prevent race conditions
-        $transfer = Transfer::where('payin_ref', $depositId)->lockForUpdate()->first();
-        
-        if (!$transfer) {
-            Log::warning('PawaPay webhook: Transfer not found', ['depositId' => $depositId]);
-            return response()->json(['ok' => false, 'error' => 'Transfer not found'], 404);
+        // Idempotency: record the webhook event and short-circuit if already processed
+        $event = \App\Models\WebhookEvent::firstOrCreate(
+            ['provider' => 'pawapay', 'type' => 'deposits', 'event_id' => (string) $depositId],
+            ['payload' => $payload, 'signature_hash' => $signature ? sha1($signature) : null]
+        );
+        if ($event->processed_at) {
+            return response()->json(['ok' => true, 'duplicate' => true]);
         }
 
-        // Log the webhook receipt
-        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
-        $timeline[] = [
-            'state' => 'payin_webhook_received',
-            'status' => $status,
-            'at' => now()->toIso8601String(),
-            'reference' => $reference
-        ];
-
-        try {
-            DB::beginTransaction();
-
-            switch ($status) {
-                case 'COMPLETED':
-                    $this->handleCompletedPayment($transfer, $timeline, $safeHaven);
-                    break;
-
-                case 'FAILED':
-                case 'REJECTED':
-                case 'EXPIRED':
-                    $this->handleFailedPayment($transfer, $timeline, $payload);
-                    break;
-
-                case 'PENDING':
-                    $this->handlePendingPayment($transfer, $timeline);
-                    break;
-
-                default:
-                    Log::warning('PawaPay webhook: Unknown status', [
-                        'status' => $status,
-                        'transfer_id' => $transfer->id,
-                        'reference' => $reference
-                    ]);
-                    $timeline[] = [
-                        'state' => 'payin_unknown_status',
-                        'at' => now()->toIso8601String(),
-                        'status' => $status,
-                        'payload' => $payload
-                    ];
-                    $transfer->update(['timeline' => $timeline]);
-            }
-
-            DB::commit();
-            return response()->json(['ok' => true]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error processing PawaPay webhook', [
-                'transfer_id' => $transfer->id ?? null,
-                'deposit_id' => $depositId,
-                'status' => $status,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'ok' => false,
-                'error' => 'Error processing webhook: ' . $e->getMessage()
-            ], 500);
-        }
+        // Dispatch async job to process deposit webhook and return fast
+        dispatch(new \App\Jobs\ProcessPawaPayDeposit($event->id, $payload));
+        return response()->json(['ok' => true]);
     }
 
     protected function handleCompletedPayment($transfer, &$timeline, $safeHaven)
@@ -115,7 +57,7 @@ class PawaPayWebhookController extends Controller
         ];
 
         $transfer->update([
-            'payin_status' => 'completed',
+            'payin_status' => 'success',
             'status' => 'payout_pending',
             'payin_at' => now(),
             'timeline' => $timeline

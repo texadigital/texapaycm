@@ -95,4 +95,55 @@ class Transfer extends Model
               });
         });
     }
+
+    /**
+     * Scope: only transfers owned by a given user id.
+     */
+    public function scopeOwnedBy($query, $userId)
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    /**
+     * Scope: free-text search across common fields.
+     */
+    public function scopeSearch($query, string $term)
+    {
+        $t = trim($term);
+        if ($t === '') { return $query; }
+        return $query->where(function($q) use ($t) {
+            $q->where('id', (int) filter_var($t, FILTER_SANITIZE_NUMBER_INT))
+              ->orWhere('recipient_bank_name', 'like', "%$t%")
+              ->orWhere('recipient_bank_code', 'like', "%$t%")
+              ->orWhere('recipient_account_number', 'like', "%$t%")
+              ->orWhere('recipient_account_name', 'like', "%$t%")
+              ->orWhere('status', 'like', "%$t%")
+              ->orWhere('payin_status', 'like', "%$t%")
+              ->orWhere('payout_status', 'like', "%$t%")
+              ->orWhere('payin_ref', 'like', "%$t%")
+              ->orWhere('payout_ref', 'like', "%$t%");
+        });
+    }
+
+    /**
+     * Scope: filter by created_at between optional from/to (YYYY-MM-DD).
+     */
+    public function scopeDateBetween($query, ?string $from, ?string $to)
+    {
+        if ($from) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+        return $query;
+    }
+
+    /**
+     * Helper accessor: receive NGN in major units.
+     */
+    public function getReceiveNgnAttribute(): float
+    {
+        return ($this->receive_ngn_minor ?? 0) / 100.0;
+    }
 }

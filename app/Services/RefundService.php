@@ -11,6 +11,7 @@ class RefundService
     protected string $baseUrl;
     protected string $apiKey;
     protected bool $isSandbox;
+    protected ?string $caBundle = null;
 
     public function __construct()
     {
@@ -18,6 +19,16 @@ class RefundService
         $this->baseUrl = rtrim(config('services.pawapay.base_url'), '/') . '/v2';
         $this->apiKey = config('services.pawapay.api_key');
         $this->isSandbox = config('services.pawapay.sandbox', true);
+        // Prefer PawaPay-specific CA bundle env, fallback to SAFEHAVEN_CA_BUNDLE
+        $bundle = env('PAWAPAY_CA_BUNDLE') ?: env('SAFEHAVEN_CA_BUNDLE');
+        if ($bundle) {
+            $resolved = $bundle;
+            if (!is_file($resolved)) {
+                $maybe = base_path($bundle);
+                if (is_file($maybe)) { $resolved = $maybe; }
+            }
+            if (is_file($resolved)) { $this->caBundle = $resolved; }
+        }
     }
 
     /**
@@ -46,12 +57,13 @@ class RefundService
             Log::info('Initiating refund for failed payout', [
                 'transfer_id' => $transfer->id,
                 'refund_id' => $refundId,
-                'amount' => $transfer->amount,
-                'currency' => $transfer->currency
+                'amount_xaf' => $transfer->amount_xaf,
+                'total_pay_xaf' => $transfer->total_pay_xaf,
+                'currency' => 'XAF'
             ]);
 
-            // Get the deposit ID from the transfer
-            $depositId = $transfer->payout_id; // This should be the original payin reference
+            // Get the original deposit (pay-in) reference from the transfer
+            $depositId = $transfer->payin_ref; // original pay-in reference
             
             // Build the webhook URL using the base URL from config
             $webhookBase = config('services.pawapay.webhook_base_url');
@@ -61,23 +73,32 @@ class RefundService
             $payload = [
                 'refundId' => $refundId,
                 'depositId' => $depositId,
-                'amount' => number_format($transfer->amount_xaf, 2, '.', ''),
+                // Refund the total amount paid by user (includes fees)
+                'amount' => number_format((float) ($transfer->total_pay_xaf ?? 0), 2, '.', ''),
                 'currency' => 'XAF',
                 'callbackUrl' => $callbackUrl,
                 'metadata' => [
                     'reason' => 'Automatic refund for failed payout',
                     'transfer_id' => $transfer->id,
-                    'original_payout_id' => $transfer->payout_id,
-                    'original_payin_id' => $depositId
+                    'original_payout_ref' => $transfer->payout_ref,
+                    'original_payin_ref' => $depositId
                 ]
             ];
 
             // Make the API request to initiate refund
-            $response = Http::withHeaders([
+            $http = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json'
-            ])->post("{$this->baseUrl}/refunds", $payload);
+            ]);
+            if ($this->caBundle) {
+                $http = $http->withOptions([
+                    'verify' => $this->caBundle,
+                    'timeout' => 20,
+                    'connect_timeout' => 10,
+                ]);
+            }
+            $response = $http->post("{$this->baseUrl}/refunds", $payload);
 
             $responseData = $response->json();
             
@@ -89,7 +110,7 @@ class RefundService
                 'refund_response' => $responseData
             ]);
 
-            if ($response->successful() && ($responseData['status'] ?? '') === 'ACCEPTED') {
+            if ($response->successful() && in_array(($responseData['status'] ?? ''), ['ACCEPTED','PENDING'], true)) {
                 Log::info('Refund initiated successfully', [
                     'transfer_id' => $transfer->id,
                     'refund_id' => $refundId,

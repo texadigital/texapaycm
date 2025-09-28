@@ -74,7 +74,23 @@ class SafeHaven
         if (!empty($clientHeader)) {
             $headers['ClientID'] = $clientHeader;
         }
-        return Http::acceptJson()->withHeaders($headers);
+        $http = Http::acceptJson();
+        // Prefer a custom CA bundle if provided (Windows may need this explicitly)
+        $caBundle = env('SAFEHAVEN_CA_BUNDLE');
+        if (!empty($caBundle)) {
+            $candidate = $caBundle;
+            $isAbsolute = str_starts_with($candidate, DIRECTORY_SEPARATOR)
+                || (strlen($candidate) > 1 && ctype_alpha($candidate[0]) && $candidate[1] === ':')
+                || str_starts_with($candidate, 'phar://');
+            if (!$isAbsolute && function_exists('base_path')) {
+                $candidate = base_path($candidate);
+            }
+            $real = realpath($candidate) ?: $candidate;
+            if (is_readable($real)) {
+                $http = $http->withOptions(['verify' => $real]);
+            }
+        }
+        return $http->withHeaders($headers);
     }
 
     /**
@@ -105,7 +121,23 @@ class SafeHaven
                 $form['scope'] = $this->scopes;
             }
 
-            $resp = Http::asForm()->post($this->baseUrl . '/oauth2/token', $form);
+            // Build HTTP client for token request, honoring custom CA bundle
+            $http = Http::asForm();
+            $caBundle = env('SAFEHAVEN_CA_BUNDLE');
+            if (!empty($caBundle)) {
+                $candidate = $caBundle;
+                $isAbsolute = str_starts_with($candidate, DIRECTORY_SEPARATOR)
+                    || (strlen($candidate) > 1 && ctype_alpha($candidate[0]) && $candidate[1] === ':')
+                    || str_starts_with($candidate, 'phar://');
+                if (!$isAbsolute && function_exists('base_path')) {
+                    $candidate = base_path($candidate);
+                }
+                $real = realpath($candidate) ?: $candidate;
+                if (is_readable($real)) {
+                    $http = $http->withOptions(['verify' => $real]);
+                }
+            }
+            $resp = $http->post($this->baseUrl . '/oauth2/token', $form);
             if (!$resp->successful()) {
                 // Retry once with alternate audience (some tenants expect base URL as aud)
                 if (empty($this->clientAssertion) && $this->audience && str_contains($this->audience, '/oauth2/token')) {
@@ -113,7 +145,7 @@ class SafeHaven
                     $assertion2 = $this->generateClientAssertionWithAudience($altAud);
                     if ($assertion2) {
                         $form['client_assertion'] = $assertion2;
-                        $resp = Http::asForm()->post($this->baseUrl . '/oauth2/token', $form);
+                        $resp = $http->post($this->baseUrl . '/oauth2/token', $form);
                     }
                 }
             }
@@ -189,14 +221,10 @@ class SafeHaven
             ];
             $signingInput = implode('.', $segments);
 
-            $keyPath = $this->privateKeyPath;
-            if (!$keyPath || !is_readable($keyPath)) {
-                $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Private key path missing or unreadable', 'path' => $keyPath];
-                return null;
-            }
-            $privateKey = file_get_contents($keyPath);
-            if ($privateKey === false) {
-                $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Failed to read private key file', 'path' => $keyPath];
+            // Cross-platform private key resolution
+            $privateKey = $this->loadPrivateKey();
+            if ($privateKey === null) {
+                // $this->lastAuthError is already set inside loadPrivateKey()
                 return null;
             }
             $pkey = openssl_pkey_get_private($privateKey, $this->privateKeyPassphrase ?: '');
@@ -260,12 +288,8 @@ class SafeHaven
             ];
             $signingInput = implode('.', $segments);
 
-            $keyPath = $this->privateKeyPath;
-            if (!$keyPath || !is_readable($keyPath)) {
-                return null;
-            }
-            $privateKey = file_get_contents($keyPath);
-            if ($privateKey === false) {
+            $privateKey = $this->loadPrivateKey();
+            if ($privateKey === null) {
                 return null;
             }
             $pkey = openssl_pkey_get_private($privateKey, $this->privateKeyPassphrase ?: '');
@@ -288,6 +312,73 @@ class SafeHaven
     protected function base64UrlEncode(string $data): string
     {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    /**
+     * Resolve private key from env in a cross-platform way.
+     * Priority:
+     * 1) SAFEHAVEN_PRIVATE_KEY (inline PEM, supports \n)
+     * 2) SAFEHAVEN_PRIVATE_KEY_BASE64 (base64-encoded PEM)
+     * 3) SAFEHAVEN_PRIVATE_KEY_PATH (absolute or relative to base_path())
+     */
+    protected function loadPrivateKey(): ?string
+    {
+        // 1) Inline PEM
+        $inline = env('SAFEHAVEN_PRIVATE_KEY');
+        if (!empty($inline)) {
+            $pem = (string) $inline;
+            // Convert escaped newlines if present
+            $pem = str_replace(["\\n", "\r\n"], "\n", $pem);
+            return trim($pem);
+        }
+
+        // 2) Base64
+        $b64 = env('SAFEHAVEN_PRIVATE_KEY_BASE64');
+        if (!empty($b64)) {
+            $decoded = base64_decode((string) $b64, true);
+            if ($decoded !== false && trim($decoded) !== '') {
+                return $decoded;
+            }
+            $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Invalid SAFEHAVEN_PRIVATE_KEY_BASE64'];
+            return null;
+        }
+
+        // 3) File path
+        $path = $this->privateKeyPath;
+        if (empty($path)) {
+            $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Private key not provided (set SAFEHAVEN_PRIVATE_KEY, SAFEHAVEN_PRIVATE_KEY_BASE64, or SAFEHAVEN_PRIVATE_KEY_PATH)'];
+            return null;
+        }
+
+        $candidate = $path;
+        $isAbsolute = str_starts_with($path, DIRECTORY_SEPARATOR)
+            || (strlen($path) > 1 && ctype_alpha($path[0]) && $path[1] === ':')
+            || str_starts_with($path, 'phar://');
+        
+        if (!$isAbsolute) {
+            // Try Laravel's base_path() first
+            if (function_exists('base_path')) {
+                try {
+                    $candidate = base_path($path);
+                } catch (\Exception $e) {
+                    // Fallback to current directory if base_path() fails
+                    $candidate = getcwd() . DIRECTORY_SEPARATOR . $path;
+                }
+            } else {
+                // Fallback to current directory
+                $candidate = getcwd() . DIRECTORY_SEPARATOR . $path;
+            }
+        }
+        if (!is_readable($candidate)) {
+            $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Private key path missing or unreadable', 'path' => $candidate];
+            return null;
+        }
+        $contents = @file_get_contents($candidate);
+        if ($contents === false) {
+            $this->lastAuthError = ['stage' => 'assertion', 'error' => 'Failed to read private key file', 'path' => $candidate];
+            return null;
+        }
+        return $contents;
     }
 
     /**

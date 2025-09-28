@@ -29,12 +29,23 @@ Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])-
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     Route::post('/account/delete', [\App\Http\Controllers\AuthController::class, 'deleteAccount'])->name('account.delete');
+
+    // Transactions
+    Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
+    Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'exportPdf'])->name('transactions.export');
+    Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransactionsController::class, 'show'])
+        ->name('transactions.show');
 });
 
 // Webhooks
 Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
+
+// Refund webhook (PawaPay sends refund status callbacks here)
+Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('webhooks.pawapay.refunds');
 
 // PawaPay dashboard may call versioned paths; add aliases to avoid 404s
 Route::post('/api/v1/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])

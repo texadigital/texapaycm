@@ -12,7 +12,8 @@ class DashboardController extends Controller
         $user = $request->user();
         $transfers = Transfer::where('user_id', $user->id)
             ->orderByDesc('created_at')
-            ->paginate(15);
+            ->limit(5)
+            ->get();
 
         return view('dashboard.index', compact('user', 'transfers'));
     }

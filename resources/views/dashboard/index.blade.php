@@ -30,8 +30,16 @@
     </form>
   </header>
   <div class="container">
-    <h2>Your transfers</h2>
-    <p class="muted">Create a new transfer from the home page. Only your transfers are shown here.</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div>
+        <h2 style="margin:0">Your transfers</h2>
+        <p class="muted" style="margin:4px 0 0 0">Only your latest 5 transfers are shown here.</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a class="btn" href="{{ route('transfer.bank') }}">Send</a>
+        <a class="btn" href="{{ route('transactions.index') }}">See more transactions</a>
+      </div>
+    </div>
 
     <table>
       <thead>
@@ -81,7 +89,7 @@
       </tbody>
     </table>
 
-    <div style="margin-top:12px">{{ $transfers->links() }}</div>
+    
 
     <form method="post" action="{{ route('account.delete') }}" onsubmit="return confirm('Delete your account? This cannot be undone.');" style="margin-top:24px">
       @csrf

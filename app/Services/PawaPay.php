@@ -11,12 +11,28 @@ class PawaPay
     protected ?string $apiKey;
     protected ?array $lastAuthError = null;
     protected string $apiVersion;
+    protected ?string $caBundle = null;
 
     public function __construct()
     {
         $this->baseUrl = rtrim((string) env('PAWAPAY_BASE_URL', ''), '/');
         $this->apiKey = env('PAWAPAY_API_KEY');
         $this->apiVersion = trim((string) env('PAWAPAY_API_VERSION', 'v2'));
+        // Prefer PawaPay-specific CA bundle, fallback to SAFEHAVEN_CA_BUNDLE
+        $bundle = env('PAWAPAY_CA_BUNDLE') ?: env('SAFEHAVEN_CA_BUNDLE');
+        if ($bundle) {
+            // Resolve relative paths like "storage/certs/cacert.pem"
+            $resolved = $bundle;
+            if (!is_file($resolved)) {
+                $maybe = base_path($bundle);
+                if (is_file($maybe)) {
+                    $resolved = $maybe;
+                }
+            }
+            if (is_file($resolved)) {
+                $this->caBundle = $resolved;
+            }
+        }
     }
 
     protected function client(string $mode = 'both')
@@ -36,7 +52,16 @@ class PawaPay
                 $headers['X-Api-Key'] = $this->apiKey;
             }
         }
-        return Http::acceptJson()->withHeaders($headers);
+        $http = Http::acceptJson()->withHeaders($headers);
+        // If we have a CA bundle, instruct Guzzle to use it for TLS verification
+        if ($this->caBundle) {
+            $http = $http->withOptions([
+                'verify' => $this->caBundle,
+                'timeout' => 20,
+                'connect_timeout' => 10,
+            ]);
+        }
+        return $http;
     }
 
     protected function path(string $suffix): string
