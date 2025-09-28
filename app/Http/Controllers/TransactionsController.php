@@ -36,10 +36,26 @@ class TransactionsController extends Controller
 
         $transfers = $query->orderByDesc('created_at')->paginate(15)->withQueryString();
 
-        // All-time totals (unfiltered)
-        $allTimeBase = Transfer::query()->ownedBy($userId);
-        $totalSentAllTime = (int) $allTimeBase->sum('amount_xaf');
-        $totalPaidAllTime = (int) Transfer::query()->ownedBy($userId)->sum('total_pay_xaf');
+        // All-time totals (only successful transactions)
+        $successfulTransfers = Transfer::query()
+            ->ownedBy($userId)
+            ->whereIn('status', ['payout_success', 'payin_success'])
+            ->orWhere(function ($query) use ($userId) {
+                $query->ownedBy($userId)
+                      ->where('payin_status', 'success')
+                      ->where('payout_status', 'success');
+            });
+        
+        $totalSentAllTime = (int) $successfulTransfers->sum('amount_xaf');
+        $totalPaidAllTime = (int) Transfer::query()
+            ->ownedBy($userId)
+            ->whereIn('status', ['payout_success', 'payin_success'])
+            ->orWhere(function ($query) use ($userId) {
+                $query->ownedBy($userId)
+                      ->where('payin_status', 'success')
+                      ->where('payout_status', 'success');
+            })
+            ->sum('total_pay_xaf');
 
         return view('transactions.index', [
             'transfers' => $transfers,

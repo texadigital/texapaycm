@@ -86,11 +86,11 @@
     <div style="margin-top:12px">{{ $transfers->links() }}</div>
 
     <div class="footer">
-      <div class="muted">Total Sent (XAF) across all-time:</div>
+      <div class="muted">Total Successfully Sent (XAF):</div>
       <div style="font-weight:700">{{ number_format($totalSentAllTime) }}</div>
     </div>
     <div class="footer">
-      <div class="muted">Total Paid (XAF, incl. fees) across all-time:</div>
+      <div class="muted">Total Successfully Paid (XAF, incl. fees):</div>
       <div style="font-weight:700">{{ number_format($totalPaidAllTime) }}</div>
     </div>
 
