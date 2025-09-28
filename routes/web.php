@@ -44,10 +44,22 @@ Route::middleware(['auth','redirect.admins'])->group(function () {
         Route::post('/personal-info', [\App\Http\Controllers\ProfileController::class, 'updatePersonalInfo'])->name('profile.personal.update');
         Route::get('/notifications', [\App\Http\Controllers\ProfileController::class, 'notifications'])->name('profile.notifications');
         Route::post('/notifications', [\App\Http\Controllers\ProfileController::class, 'updateNotifications'])->name('profile.notifications.update');
+        // Security
+        Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('profile.security');
+        Route::post('/security/toggles', [\App\Http\Controllers\SecurityController::class, 'updateToggles'])->name('profile.security.toggles');
+        Route::post('/security/pin', [\App\Http\Controllers\SecurityController::class, 'updatePin'])->name('profile.security.pin');
     });
     
     // Account management
     Route::post('/account/delete', [\App\Http\Controllers\ProfileController::class, 'deleteAccount'])->name('account.delete');
+
+    // Support routes
+    Route::prefix('support')->group(function () {
+        Route::get('/help', [\App\Http\Controllers\SupportController::class, 'help'])->name('support.help');
+        Route::get('/contact', [\App\Http\Controllers\SupportController::class, 'contact'])->name('support.contact');
+        Route::post('/contact', [\App\Http\Controllers\SupportController::class, 'submitTicket'])->name('support.contact.submit');
+        Route::get('/tickets', [\App\Http\Controllers\SupportController::class, 'myTickets'])->name('support.tickets');
+    });
 });
 
 // Webhooks

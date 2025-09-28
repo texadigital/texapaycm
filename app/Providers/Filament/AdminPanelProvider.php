@@ -21,6 +21,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Widgets\TodaysVolumeWidget;
 use App\Filament\Widgets\NearLimitUsersWidget;
 use App\Filament\Widgets\RecentCriticalUtilizationWidget;
+use App\Http\Middleware\EnsureAdmin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -60,6 +61,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                EnsureAdmin::class,
             ]);
     }
 }

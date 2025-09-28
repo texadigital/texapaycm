@@ -84,6 +84,22 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Security settings relation
+     */
+    public function securitySettings()
+    {
+        return $this->hasOne(UserSecuritySetting::class);
+    }
+
+    /**
+     * Ensure a settings row exists
+     */
+    public function getOrCreateSecuritySettings(): UserSecuritySetting
+    {
+        return $this->securitySettings ?: $this->securitySettings()->create();
+    }
+
+    /**
      * Get or create user limits
      */
     public function getOrCreateLimits(): UserLimit
