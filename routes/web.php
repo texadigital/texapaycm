@@ -40,6 +40,10 @@ Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::prefix('profile')->group(function () {
         Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
         Route::get('/limits', [\App\Http\Controllers\ProfileController::class, 'limits'])->name('profile.limits');
+        Route::get('/personal-info', [\App\Http\Controllers\ProfileController::class, 'personalInfo'])->name('profile.personal');
+        Route::post('/personal-info', [\App\Http\Controllers\ProfileController::class, 'updatePersonalInfo'])->name('profile.personal.update');
+        Route::get('/notifications', [\App\Http\Controllers\ProfileController::class, 'notifications'])->name('profile.notifications');
+        Route::post('/notifications', [\App\Http\Controllers\ProfileController::class, 'updateNotifications'])->name('profile.notifications.update');
     });
     
     // Account management

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\LimitCheckService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
@@ -74,5 +75,57 @@ class ProfileController extends Controller
         // Redirect to home with success message
         return redirect()->route('login.show')
             ->with('success', 'Your account has been successfully deleted.');
+    }
+
+    public function personalInfo(Request $request)
+    {
+        $user = $request->user();
+        return view('profile.personal-info', compact('user'));
+    }
+
+    public function updatePersonalInfo(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'full_name' => ['nullable','string','max:190'],
+            'notification_email' => ['nullable','email','max:190'],
+            'avatar' => ['nullable','image','max:2048'],
+        ]);
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $validated['avatar_path'] = $path;
+        }
+
+        $user->fill([
+            'full_name' => $validated['full_name'] ?? $user->full_name,
+            'notification_email' => $validated['notification_email'] ?? $user->notification_email,
+            'avatar_path' => $validated['avatar_path'] ?? $user->avatar_path,
+        ])->save();
+
+        return back()->with('success', 'Profile updated.');
+    }
+
+    public function notifications(Request $request)
+    {
+        $user = $request->user();
+        return view('profile.notifications', compact('user'));
+    }
+
+    public function updateNotifications(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'email_notifications' => ['nullable','boolean'],
+            'sms_notifications' => ['nullable','boolean'],
+        ]);
+
+        // Persist via AdminSetting or user preferences table in future; for now store on user model if columns exist
+        $user->fill([
+            'email_notifications' => (bool) $request->boolean('email_notifications'),
+            'sms_notifications' => (bool) $request->boolean('sms_notifications'),
+        ])->save();
+
+        return back()->with('success', 'Notification preferences saved.');
     }
 }

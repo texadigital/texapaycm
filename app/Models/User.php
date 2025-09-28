@@ -27,6 +27,15 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'pin_hash',
         'is_admin',
+        // Profile fields
+        'full_name',
+        'notification_email',
+        'avatar_path',
+        'phone_verified_at',
+        'profile_completed_at',
+        // Notification prefs (if present)
+        'email_notifications',
+        'sms_notifications',
     ];
 
     /**
@@ -49,8 +58,12 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'profile_completed_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'email_notifications' => 'boolean',
+            'sms_notifications' => 'boolean',
         ];
     }
 
