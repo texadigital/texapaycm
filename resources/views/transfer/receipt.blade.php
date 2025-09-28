@@ -545,8 +545,8 @@
                                 <i class="fas fa-print"></i> Print Receipt
                             </button>
                         @elseif($isFailed)
-                            <a href="{{ route('support') }}" class="btn btn-outline">
-                                <i class="fas fa-question-circle"></i> Get Help
+                            <a href="{{ route('dashboard') }}" class="btn btn-outline">
+                                <i class="fas fa-home"></i> Back to Dashboard
                             </a>
                         @endif
                         
@@ -564,7 +564,7 @@
         </div>
         
         <div class="text-center text-sm text-muted mb-8">
-            <p>Need help? <a href="{{ route('support') }}" class="text-primary-light hover:underline">Contact Support</a></p>
+            <p>Need help? <a href="mailto:support@texa.ng" class="text-primary-light hover:underline">Contact Support</a></p>
             <p class="text-xs mt-2">Reference: {{ $transfer->id }}</p>
         </div>
     </div>
