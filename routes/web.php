@@ -26,23 +26,23 @@ Route::middleware('auth')->prefix('transfer')->group(function () {
 
 // Auth + Dashboard
 Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
-Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register'])->name('register');
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
-    Route::post('/account/delete', [\App\Http\Controllers\AuthController::class, 'deleteAccount'])->name('account.delete');
-
-    // Transactions
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
-    Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'exportPdf'])->name('transactions.export');
-    Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransactionsController::class, 'show'])
-        ->name('transactions.show');
+    Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'export'])->name('transactions.export');
+    
+    // Profile routes
+    Route::prefix('profile')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
+        Route::get('/limits', [\App\Http\Controllers\ProfileController::class, 'limits'])->name('profile.limits');
+    });
 });
 
 // Webhooks
-Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
+Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
 

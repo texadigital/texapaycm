@@ -8,6 +8,7 @@ use App\Services\OpenExchangeRates;
 use App\Services\PawaPay;
 use App\Services\SafeHaven;
 use App\Services\RefundService;
+use App\Services\LimitCheckService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -80,7 +81,12 @@ class TransferController extends Controller
             }
         }
 
-        return view('transfer.quote', compact('bankCode','accountNumber','accountName','bankName','quote','remaining'));
+        // Get user's limit warnings
+        $limitCheckService = app(LimitCheckService::class);
+        $limitWarnings = $limitCheckService->getLimitWarnings(auth()->user());
+        $limitStatus = $limitCheckService->getUserLimitStatus(auth()->user());
+
+        return view('transfer.quote', compact('bankCode','accountNumber','accountName','bankName','quote','remaining','limitWarnings','limitStatus'));
     }
 
     public function createQuote(Request $request, OpenExchangeRates $oxr): RedirectResponse
@@ -283,6 +289,10 @@ class TransferController extends Controller
                 ->route('transfer.receipt', $transfer)
                 ->with('info', 'A transaction with this quote already exists.');
         }
+
+        // Record transaction in limits system
+        $limitCheckService = app(LimitCheckService::class);
+        $limitCheckService->recordTransaction(auth()->user(), $quote->amount_xaf, false);
 
         // Generate a unique reference for this transaction
         $reference = (string) Str::uuid();
