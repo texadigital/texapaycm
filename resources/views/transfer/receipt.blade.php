@@ -325,6 +325,10 @@
         // Get the last timeline event for additional context
         $lastEvent = collect($transfer->timeline ?? [])->last();
         $lastEventTime = $lastEvent['at'] ?? null;
+
+        $featurePdf = filter_var(env('FEATURE_ENABLE_RECEIPT_PDF', true), FILTER_VALIDATE_BOOLEAN);
+        $featureShare = filter_var(env('FEATURE_ENABLE_RECEIPT_SHARE', true), FILTER_VALIDATE_BOOLEAN);
+        $featureTimeline = filter_var(env('FEATURE_SHOW_TRANSACTION_TIMELINE', true), FILTER_VALIDATE_BOOLEAN);
     @endphp
 
     @if ($isPending)
@@ -379,7 +383,7 @@
                 @endif
             </div>
 
-            <div class="receipt-body">
+            <div class="receipt-body" id="receiptBody" data-transfer-id="{{ $transfer->id }}">
                 <!-- Status Alert -->
                 @if($isPending)
                     <div class="alert alert-info">
@@ -500,10 +504,28 @@
                     </div>
                 </div>
 
+                @if($featureTimeline)
+                <!-- USSD Guidance Panel (shown during pay-in pending) -->
+                @if($isPending && $transfer->status === 'payin_pending')
+                <div class="section" id="ussdPanel">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-mobile-alt"></i>
+                        <div class="alert-content">
+                            <div class="alert-title">Please confirm the payment on your phone.</div>
+                            <div class="alert-message">
+                                <div><strong>MTN MoMo:</strong> Dial <code>*126#</code> → Pending Approvals → Approve</div>
+                                <div><strong>Orange Money:</strong> Dial <code>#150#</code> → Pending Approvals → Approve</div>
+                                <div style="margin-top:6px;">We’ll update each step here in real time.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Timeline -->
-                <div class="section">
+                <div class="section" id="timelineSection">
                     <div class="section-title">Transaction Timeline</div>
-                    <div class="timeline">
+                    <div class="timeline" id="timelineList">
                         @if(is_array($transfer->timeline) && count($transfer->timeline) > 0)
                             @foreach($transfer->timeline as $event)
                                 @php
@@ -533,6 +555,7 @@
                         @endif
                     </div>
                 </div>
+                @endif
 
                 <!-- Actions -->
                 <div class="section">
@@ -540,6 +563,16 @@
                         <a href="{{ route('transfer.bank') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> New Transfer
                         </a>
+                        @if($featurePdf)
+                        <a href="{{ route('transfer.receipt.pdf', $transfer) }}" class="btn btn-outline">
+                            <i class="fas fa-file-pdf"></i> Download PDF
+                        </a>
+                        @endif
+                        @if($featureShare)
+                        <button type="button" id="shareBtn" class="btn btn-outline">
+                            <i class="fas fa-share-alt"></i> Share
+                        </button>
+                        @endif
                         
                         @if($isCompleted)
                             <button onclick="window.print()" class="btn btn-outline">
@@ -575,4 +608,115 @@
         <i class="fas fa-sync-alt fa-spin mr-1"></i> Auto-updating...
     </div>
     @endif
+
+    <script>
+    (function(){
+        const tz = 'Africa/Douala';
+        const fmt = new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const container = document.getElementById('receiptBody');
+        if (!container) return;
+        const transferId = container.getAttribute('data-transfer-id');
+        const timelineEl = document.getElementById('timelineList');
+        const statusIcon = document.querySelector('.status-icon');
+        const titleEl = document.querySelector('.receipt-title');
+        const subtitleEl = document.querySelector('.receipt-subtitle');
+        const ussdPanel = document.getElementById('ussdPanel');
+        const featureTimeline = true;
+        let stop = false;
+        
+        function stateToClass(s){
+            s = (s || '').toLowerCase();
+            if (s.includes('fail') || s.includes('reject') || s.includes('error')) return 'failed';
+            if (s.includes('complete') || s.includes('success')) return 'success';
+            if (s.includes('pending') || s.includes('process')) return 'pending';
+            return 'info';
+        }
+
+        function renderTimeline(events){
+            if (!timelineEl) return;
+            if (!Array.isArray(events) || events.length === 0){
+                timelineEl.innerHTML = '<div class="text-muted">No timeline events available.</div>';
+                return;
+            }
+            const html = events.map(ev => {
+                const cls = stateToClass(ev.state);
+                const time = ev.at ? fmt.format(new Date(ev.at)) : '';
+                const label = (ev.state || '').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+                const note = ev.reason ? `<div class="timeline-note">${ev.reason}</div>` : '';
+                return `<div class="timeline-item ${cls}">\n<div class="timeline-time">${time}</div>\n<div class="timeline-content">${label}${note}</div>\n</div>`;
+            }).join('');
+            timelineEl.innerHTML = html;
+        }
+
+        async function poll(){
+            if (stop) return;
+            try {
+                const res = await fetch(`/transfer/${transferId}/timeline`, { headers: { 'Accept': 'application/json' }});
+                if (!res.ok) throw new Error('poll failed');
+                const data = await res.json();
+                // Update timeline
+                if (featureTimeline) renderTimeline(data.timeline || []);
+                // Update header status
+                const status = (data.status || '').toLowerCase();
+                if (statusIcon && titleEl && subtitleEl){
+                    if (status === 'completed' || status === 'payout_success'){
+                        statusIcon.classList.remove('pending','failed');
+                        statusIcon.classList.add('success');
+                        titleEl.textContent = 'Transfer Completed';
+                        subtitleEl.textContent = 'Your transfer was successful';
+                        stop = true;
+                    } else if (status.includes('failed') || status === 'failed'){
+                        statusIcon.classList.remove('pending','success');
+                        statusIcon.classList.add('failed');
+                        titleEl.textContent = 'Transfer Failed';
+                        subtitleEl.textContent = 'Your transfer could not be completed';
+                        stop = true;
+                    } else {
+                        statusIcon.classList.remove('success','failed');
+                        statusIcon.classList.add('pending');
+                        titleEl.textContent = 'Transfer in Progress';
+                        subtitleEl.textContent = 'We\'re processing your transfer';
+                    }
+                }
+                // Toggle USSD panel visibility
+                if (ussdPanel){
+                    if (status === 'payin_pending') {
+                        ussdPanel.style.display = '';
+                    } else {
+                        ussdPanel.style.display = 'none';
+                    }
+                }
+            } catch(e) {
+                // swallow errors; retry later
+            } finally {
+                if (!stop) setTimeout(poll, 3000);
+            }
+        }
+
+        // Start polling if non-terminal
+        @if($isPending)
+        poll();
+        @endif
+
+        // Share button
+        const shareBtn = document.getElementById('shareBtn');
+        if (shareBtn){
+            shareBtn.addEventListener('click', async function(){
+                try {
+                    const res = await fetch(`/transfer/${transferId}/share-url`, { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'), 'Accept': 'application/json' }});
+                    const data = await res.json();
+                    const url = data.url;
+                    if (navigator.share){
+                        await navigator.share({ title: 'TexaPay Receipt', url });
+                    } else {
+                        await navigator.clipboard.writeText(url);
+                        alert('Share link copied to clipboard');
+                    }
+                } catch(e){
+                    alert('Failed to generate share link.');
+                }
+            });
+        }
+    })();
+    </script>
 @endsection

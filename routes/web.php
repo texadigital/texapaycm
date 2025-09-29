@@ -31,6 +31,16 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
     Route::post('/{transfer}/payin/status', [\App\Http\Controllers\TransferController::class, 'payinStatus'])->name('transfer.payin.status');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
     Route::post('/{transfer}/payout/status', [\App\Http\Controllers\TransferController::class, 'payoutStatus'])->name('transfer.payout.status');
+
+    // Live timeline JSON for client polling
+    Route::get('/{transfer}/timeline', [\App\Http\Controllers\TransferController::class, 'timeline'])
+        ->name('transfer.timeline');
+    // Download single receipt as PDF
+    Route::get('/{transfer}/receipt/pdf', [\App\Http\Controllers\TransferController::class, 'receiptPdf'])
+        ->name('transfer.receipt.pdf');
+    // Generate a temporary signed share link (JSON)
+    Route::post('/{transfer}/share-url', [\App\Http\Controllers\TransferController::class, 'shareLink'])
+        ->name('transfer.receipt.share.link');
 });
 
 // Auth + Dashboard
@@ -168,4 +178,10 @@ Route::get('/health/oxr', function () {
     
     return response()->json($debug);
 });
+
+// Signed, shareable receipt view (public, signed URL required)
+Route::get('/s/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showSharedReceipt'])
+    ->middleware('signed')
+    ->name('transfer.receipt.shared');
+
 

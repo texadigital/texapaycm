@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class TransferController extends Controller
 {
@@ -814,5 +815,71 @@ class TransferController extends Controller
         return redirect()
             ->route('transfer.receipt', $transfer)
             ->with('info', 'Payout status: ' . $resp['status']);
+    }
+
+    /**
+     * Live timeline JSON endpoint for polling.
+     */
+    public function timeline(Request $request, Transfer $transfer)
+    {
+        // Owner guard (route already under auth + redirect.admins). Double-check ownership.
+        if (auth()->check() && !((bool) (auth()->user()->is_admin ?? false))) {
+            abort_if($transfer->user_id !== auth()->id(), 403);
+        }
+        $data = [
+            'id' => $transfer->id,
+            'status' => $transfer->status,
+            'payin_status' => $transfer->payin_status,
+            'payout_status' => $transfer->payout_status,
+            'timeline' => $transfer->timeline ?? [],
+            'updated_at' => optional($transfer->updated_at)->toIso8601String(),
+        ];
+        return response()->json($data);
+    }
+
+    /**
+     * Download single receipt as PDF (fallback to HTML if DomPDF not installed).
+     */
+    public function receiptPdf(Request $request, Transfer $transfer)
+    {
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_PDF', true), FILTER_VALIDATE_BOOLEAN);
+        abort_unless($enabled, 404);
+
+        $data = ['transfer' => $transfer];
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('transfer.receipt_pdf', $data);
+            $filename = 'receipt-' . $transfer->id . '-' . now()->format('Ymd-Hi') . '.pdf';
+            return $pdf->download($filename);
+        }
+        // Fallback: return printable HTML
+        return response()->view('transfer.receipt_pdf', $data);
+    }
+
+    /**
+     * Generate a temporary signed share link for this receipt.
+     */
+    public function shareLink(Request $request, Transfer $transfer)
+    {
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_SHARE', true), FILTER_VALIDATE_BOOLEAN);
+        abort_unless($enabled, 404);
+
+        // Owner guard
+        abort_if($transfer->user_id !== auth()->id(), 403);
+
+        $days = (int) env('RECEIPT_SHARE_TTL_DAYS', 7);
+        $expires = now()->addDays(max(1, $days));
+        $url = URL::temporarySignedRoute('transfer.receipt.shared', $expires, ['transfer' => $transfer->id]);
+        return response()->json(['url' => $url, 'expires_at' => $expires->toIso8601String()]);
+    }
+
+    /**
+     * Public, signed receipt view with masked data and no account actions.
+     */
+    public function showSharedReceipt(Request $request, Transfer $transfer): View
+    {
+        return view('transfer.receipt', [
+            'transfer' => $transfer,
+            'shared' => true,
+        ]);
     }
 }
