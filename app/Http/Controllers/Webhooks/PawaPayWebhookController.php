@@ -34,9 +34,15 @@ class PawaPayWebhookController extends Controller
             return response()->json(['ok' => true, 'duplicate' => true]);
         }
 
-        // Dispatch async job to process deposit webhook and return fast
+        // Process synchronously in dev/local to avoid pending state without a running worker
+        $sync = filter_var(env('WEBHOOKS_SYNC', true), FILTER_VALIDATE_BOOL);
+        if ($sync) {
+            \App\Jobs\ProcessPawaPayDeposit::dispatchSync($event->id, $payload);
+            return response()->json(['ok' => true, 'processed' => 'sync']);
+        }
+        // Otherwise, dispatch to queue
         dispatch(new \App\Jobs\ProcessPawaPayDeposit($event->id, $payload));
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'queued' => true]);
     }
 
     protected function handleCompletedPayment($transfer, &$timeline, $safeHaven)

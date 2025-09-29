@@ -44,6 +44,14 @@ class Transfer extends Model
         'timeline',
     ];
 
+    /**
+     * Sender (owner) of the transfer
+     */
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class);
+    }
+
     protected $casts = [
         'fx_fetched_at' => 'datetime',
         'payin_at' => 'datetime',

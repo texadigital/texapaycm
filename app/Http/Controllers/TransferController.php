@@ -31,6 +31,66 @@ class TransferController extends Controller
         return view('transfer.bank', $data);
     }
 
+    /**
+     * Poll pay-in (deposit) status from PawaPay and update the transfer accordingly.
+     * If completed, automatically initiate payout to the recipient.
+     */
+    public function payinStatus(Request $request, Transfer $transfer, \App\Services\PawaPay $pawa, SafeHaven $safeHaven)
+    {
+        // Must have a payin_ref (depositId)
+        if (!$transfer->payin_ref) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'No pay-in reference to check.'], 400);
+            }
+            return back()->with('error', 'No pay-in reference to check.');
+        }
+
+        $statusResp = $pawa->getPayInStatus($transfer->payin_ref);
+        $status = $statusResp['status'] ?? 'pending';
+        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+        $timeline[] = [
+            'state' => 'payin_status_check',
+            'at' => now()->toIso8601String(),
+            'status' => $status,
+            'raw' => $statusResp['raw'] ?? null,
+        ];
+
+        if ($status === 'success') {
+            // Mark payin completed and proceed to payout
+            $transfer->update([
+                'payin_status' => 'success',
+                'status' => 'payout_pending',
+                'payin_at' => now(),
+                'timeline' => $timeline,
+            ]);
+
+            // Reuse payout initiation flow
+            return $this->initiatePayout($request, $transfer, $safeHaven);
+        } elseif ($status === 'failed') {
+            $reason = $statusResp['raw']['message'] ?? 'Payment failed';
+            $timeline[] = [
+                'state' => 'payin_failed',
+                'at' => now()->toIso8601String(),
+                'reason' => $reason,
+            ];
+            $transfer->update([
+                'payin_status' => 'failed',
+                'status' => 'failed',
+                'timeline' => $timeline,
+            ]);
+
+            return redirect()->route('transfer.receipt', $transfer)->with('error', $reason);
+        }
+
+        // Still pending
+        $transfer->update([
+            'payin_status' => 'pending',
+            'status' => 'payin_pending',
+            'timeline' => $timeline,
+        ]);
+        return redirect()->route('transfer.receipt', $transfer)->with('info', 'Payment still pending.');
+    }
+
     public function verifyBank(Request $request, SafeHaven $safeHaven): RedirectResponse
     {
         $validated = $request->validate([
@@ -308,7 +368,8 @@ class TransferController extends Controller
             'customer_message' => env('PAWAPAY_CUSTOMER_MESSAGE', 'TexaPay Payment'),
         ]);
 
-        if (!isset($resp['success']) || $resp['success'] !== true) {
+        // PawaPay v2 returns status: ACCEPTED -> we map to 'pending'. Only treat explicit 'failed' as failure
+        if (($resp['status'] ?? 'failed') === 'failed') {
             // Log the failure
             $errorMessage = $resp['message'] ?? 'Failed to initiate payment';
             $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
@@ -686,9 +747,10 @@ class TransferController extends Controller
         }
 
         $method = $status >= 400 ? 'error' : 'info';
+        $transferParam = $request->route('transfer');
         return redirect()
-            ->route('transfer.receipt', ['transfer' => $request->route('transfer')])
-            ->with($method, $data['message']);
+            ->route('transfer.receipt', $transferParam)
+            ->with($method, $data['message'] ?? null);
     }
 
     public function payoutStatus(Request $request, Transfer $transfer, SafeHaven $safeHaven)

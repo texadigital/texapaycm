@@ -446,6 +446,16 @@
                         <span class="detail-label">Date</span>
                         <span class="detail-value">{{ $transfer->created_at->format('M j, Y \a\t g:i A') }}</span>
                     </div>
+                    @php
+                        $narrEvent = collect($transfer->timeline ?? [])->reverse()->first(function($e){ return isset($e['narration']); });
+                        $narrText = $narrEvent['narration'] ?? null;
+                    @endphp
+                    @if($narrText)
+                    <div class="detail-row">
+                        <span class="detail-label">Narration</span>
+                        <span class="detail-value">{{ $narrText }}</span>
+                    </div>
+                    @endif
                 </div>
 
                 <!-- Amount Details -->

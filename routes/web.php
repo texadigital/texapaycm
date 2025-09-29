@@ -22,6 +22,7 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
     Route::post('/quote/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
 
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
+    Route::post('/{transfer}/payin/status', [\App\Http\Controllers\TransferController::class, 'payinStatus'])->name('transfer.payin.status');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
     Route::post('/{transfer}/payout/status', [\App\Http\Controllers\TransferController::class, 'payoutStatus'])->name('transfer.payout.status');
 });

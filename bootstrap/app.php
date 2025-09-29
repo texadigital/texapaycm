@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'check.limits' => \App\Http\Middleware\CheckUserLimits::class,
             'redirect.admins' => \App\Http\Middleware\RedirectAdminsToFilament::class,
         ]);
+
+        // Trust ngrok (and other) reverse proxies to honor X-Forwarded-* headers
+        // This ensures request()->isSecure() and URL generation use https when tunneled
+        $middleware->trustProxies('*');
     })
     ->withProviders([
         \App\Providers\RefundServiceProvider::class,

@@ -69,13 +69,11 @@ class RefundService
             $webhookBase = config('services.pawapay.webhook_base_url');
             $callbackUrl = "{$webhookBase}/api/v1/webhooks/pawapay/refunds";
             
-            // Prepare the refund payload
+            // Prepare the refund payload per pawaPay docs
+            // For full refund: send only refundId + depositId (no amount/currency)
             $payload = [
                 'refundId' => $refundId,
                 'depositId' => $depositId,
-                // Refund the total amount paid by user (includes fees)
-                'amount' => number_format((float) ($transfer->total_pay_xaf ?? 0), 2, '.', ''),
-                'currency' => 'XAF',
                 'callbackUrl' => $callbackUrl,
                 'metadata' => [
                     'reason' => 'Automatic refund for failed payout',
@@ -84,6 +82,13 @@ class RefundService
                     'original_payin_ref' => $depositId
                 ]
             ];
+            // If business rules require partial refund, include amount and currency.
+            // Note: PawaPay expects amounts in UNITS (integer for XAF), formatted as string.
+            $partialMinor = null; // keep null for full refund
+            if ($partialMinor !== null) {
+                $payload['amount'] = (string) (int) $partialMinor; // XAF units
+                $payload['currency'] = 'XAF';
+            }
 
             // Make the API request to initiate refund
             $http = Http::withHeaders([
@@ -126,7 +131,7 @@ class RefundService
             }
 
             // Handle API errors
-            $errorMessage = $responseData['message'] ?? 'Unknown error';
+            $errorMessage = $responseData['message'] ?? ($responseData['failureReason']['failureMessage'] ?? 'Unknown error');
             Log::error('Failed to initiate refund', [
                 'transfer_id' => $transfer->id,
                 'status' => $response->status(),
