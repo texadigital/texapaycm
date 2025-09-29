@@ -43,6 +43,8 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
         ->name('transfer.receipt.share.link');
 });
 
+ 
+
 // Auth + Dashboard
 Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');

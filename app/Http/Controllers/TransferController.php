@@ -7,6 +7,8 @@ use App\Models\Transfer;
 use App\Services\OpenExchangeRates;
 use App\Services\PawaPay;
 use App\Services\SafeHaven;
+use App\Models\AdminSetting;
+use App\Services\PricingEngine;
 use App\Services\RefundService;
 use App\Services\LimitCheckService;
 use Carbon\Carbon;
@@ -166,23 +168,44 @@ class TransferController extends Controller
         $usdToNgn = (float) $fx['usd_to_ngn'];
         $cross = $usdToNgn / $usdToXaf; // XAF->NGN
 
-        // Basic margin & fees from env for now (to be moved to Settings model)
-        $marginBps = (int) (env('FX_MARGIN_BPS', 0));
-        $adjustedRate = $cross * (1 - ($marginBps / 10000));
-
         $amountXaf = (int) round($validated['amount_xaf']);
-        $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
-        $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
-        $percentFee = (int) floor($amountXaf * $percentBps / 10000);
-        $feeTotal = $fixedFee + $percentFee;
 
-        $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
-        $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
-        $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
+        // Feature-flagged pricing v2 path
+        $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
+        if ($pricingV2) {
+            $engine = app(PricingEngine::class);
+            $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
+                'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
+            ]);
+            $adjustedRate = (float) $calc['effective_rate'];
+            $feeTotal = (int) $calc['fee_amount_xaf'];
+            $totalPayXaf = (int) $calc['total_pay_xaf'];
+            $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
 
-        $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+            \Log::info('pricing_v2_applied', [
+                'amount_xaf' => $amountXaf,
+                'fx_margin_bps' => (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0)),
+                'fee_amount_xaf' => $feeTotal,
+                'effective_rate' => $adjustedRate,
+            ]);
+        } else {
+            // Legacy env-based pricing
+            $marginBps = (int) (env('FX_MARGIN_BPS', 0));
+            $adjustedRate = $cross * (1 - ($marginBps / 10000));
 
-        $ttl = (int) env('QUOTE_TTL_SECONDS', 90);
+            $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
+            $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
+            $percentFee = (int) floor($amountXaf * $percentBps / 10000);
+            $feeTotal = $fixedFee + $percentFee;
+
+            $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
+            $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
+            $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
+            $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+        }
+
+        // TTL: prefer pricing setting when v2, else env
+        $ttl = (int) AdminSetting::getValue('pricing.quote_ttl_secs', (int) env('QUOTE_TTL_SECONDS', 90));
         $userId = auth()->id();
         if (!$userId) {
             $userId = \App\Models\User::query()->min('id');
@@ -206,6 +229,8 @@ class TransferController extends Controller
         session(['transfer.quote_id' => $quote->id]);
         return redirect()->route('transfer.quote')->with('quote_ready', true);
     }
+
+    
 
     public function confirmPayIn(Request $request, PawaPay $pawa): RedirectResponse
     {
@@ -329,6 +354,18 @@ class TransferController extends Controller
                 'provider' => $provider,
                 'timeline' => [
                     ['state' => 'quote_created', 'at' => now()->toIso8601String()],
+                    [
+                        'state' => 'pricing_breakdown',
+                        'at' => now()->toIso8601String(),
+                        'interbank_rate' => (float) $quote->cross_rate_xaf_to_ngn,
+                        'effective_rate' => (float) $quote->adjusted_rate_xaf_to_ngn,
+                        'margin_percent' => ($quote->cross_rate_xaf_to_ngn > 0)
+                            ? max(0.0, (1 - ($quote->adjusted_rate_xaf_to_ngn / $quote->cross_rate_xaf_to_ngn)) * 100)
+                            : 0.0,
+                        'fee_amount_xaf' => (int) $quote->fee_total_xaf,
+                        'total_pay_xaf' => (int) $quote->total_pay_xaf,
+                        'receive_ngn_minor' => (int) $quote->receive_ngn_minor,
+                    ],
                     ['state' => 'payin_pending', 'at' => now()->toIso8601String(), 'msisdn' => $msisdn, 'provider' => $provider],
                 ],
             ]);
@@ -603,24 +640,34 @@ class TransferController extends Controller
                         'response' => $resp['raw'] ?? null
                     ];
                     $updateData['timeline'] = $timeline;
-                    
+                    // Ensure failed statuses are persisted before attempting refund
+                    $updateData['payout_status'] = 'failed';
+                    $updateData['status'] = 'failed';
+
                     Log::error('Payout failed', [
                         'transfer_id' => $transfer->id,
                         'idempotency_key' => $idempotencyKey,
                         'error' => $errorMsg,
                         'response' => $resp['raw'] ?? null
                     ]);
-                    
+
+                    // Persist failure to make refund eligibility pass
+                    $transfer->update($updateData);
+
                     // If payin was successful but payout failed, initiate refund
                     if ($transfer->payin_status === 'success') {
-                        $this->initiateRefund($transfer, $refundService, [
+                        $this->initiateRefund($transfer->fresh(), $refundService, [
                             'error' => $errorMsg,
                             'response' => $resp['raw'] ?? null
                         ]);
                     }
-                    
-                    // Throw exception to trigger rollback
-                    throw new \Exception("Payout failed: " . $errorMsg);
+
+                    // Return error response instead of throwing (we've already persisted failure)
+                    return $this->jsonOrRedirect($request, [
+                        'status' => 'error',
+                        'message' => 'NGN payout failed: ' . $errorMsg,
+                        'transfer_id' => $transfer->id,
+                    ], 400);
                 }
 
                 // Update the transfer

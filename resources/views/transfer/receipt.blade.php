@@ -504,6 +504,34 @@
                     </div>
                 </div>
 
+                @if(Auth::check() && (bool) (Auth::user()->is_admin ?? false))
+                <!-- Pricing Breakdown (Admin Only) -->
+                @php
+                    $interbank = ($transfer->usd_to_xaf > 0)
+                        ? ((float) $transfer->usd_to_ngn / (float) $transfer->usd_to_xaf)
+                        : null;
+                    $effective = (float) ($transfer->adjusted_rate_xaf_to_ngn ?? 0);
+                    $marginPct = ($interbank && $interbank > 0)
+                        ? max(0.0, (1 - ($effective / $interbank)) * 100)
+                        : null;
+                @endphp
+                <div class="section">
+                    <div class="section-title">Pricing Breakdown</div>
+                    <div class="detail-row">
+                        <span class="detail-label">Interbank Rate (XAF→NGN)</span>
+                        <span class="detail-value">{{ $interbank ? number_format($interbank, 6) : '—' }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Margin (%)</span>
+                        <span class="detail-value">{{ !is_null($marginPct) ? number_format($marginPct, 2) . '%' : '—' }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Effective Rate (XAF→NGN)</span>
+                        <span class="detail-value">{{ number_format($effective, 6) }}</span>
+                    </div>
+                </div>
+                @endif
+
                 @if($featureTimeline)
                 <!-- USSD Guidance Panel (shown during pay-in pending) -->
                 @if($isPending && $transfer->status === 'payin_pending')
