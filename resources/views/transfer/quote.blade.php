@@ -1,12 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quote • XAF → NGN</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('content')
     <style>
         body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #0b1020; color: #e6e8ec; margin: 0; }
         .container { max-width: 640px; margin: 40px auto; padding: 24px; background: #121836; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
@@ -28,8 +22,6 @@
         .kv strong { color: #e6e8ec; }
         .countdown { font-weight: 600; color: #f59e0b; }
     </style>
-</head>
-<body>
 <div class="container">
     <h1>Quote • XAF → NGN</h1>
     <p class="muted">Recipient: <strong>{{ $accountName }}</strong> • {{ $bankName }} • {{ $accountNumber }}<?php
@@ -165,5 +157,4 @@
     var expirationCheck = setInterval(checkExpiration, 10000);
 })();
 </script>
-</body>
-</html>
+@endsection

@@ -19,6 +19,7 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
     Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
         ->middleware('check.limits')
         ->name('transfer.quote.create');
+    Route::post('/quote/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
 
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
@@ -71,6 +72,11 @@ Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebh
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.refunds');
+
+// Public static pages
+Route::get('/policies', function () {
+    return view('static.policies');
+})->name('policies');
 
 // PawaPay dashboard may call versioned paths; add aliases to avoid 404s
 Route::post('/api/v1/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])

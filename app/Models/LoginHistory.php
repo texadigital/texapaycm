@@ -9,6 +9,9 @@ class LoginHistory extends Model
 {
     use HasFactory;
 
+    // Migration created a singular table name; bind explicitly
+    protected $table = 'login_history';
+
     protected $fillable = [
         'user_id',
         'ip_address',

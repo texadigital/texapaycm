@@ -1,37 +1,19 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard • TexaPay</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('content')
   <style>
-    body{font-family:Inter,system-ui,Arial,sans-serif;background:#0b1220;color:#e6e8ec;margin:0}
-    header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2a44}
     .container{max-width:1000px;margin:0 auto;padding:20px}
     .btn{display:inline-block;background:#2563eb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;text-decoration:none}
     .btn-danger{background:#dc2626}
     table{width:100%;border-collapse:collapse;margin-top:16px}
-    th,td{padding:10px;border-bottom:1px solid #1f2a44;text-align:left}
+    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
     .badge{padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}
-    .b-success{background:#064e3b;color:#86efac}
-    .b-warn{background:#2f2a12;color:#fde68a}
-    .b-fail{background:#3a121a;color:#fecaca}
-    .muted{color:#9aa4b2}
+    .b-success{background:#e6fffa;color:#065f46}
+    .b-warn{background:#fff7ed;color:#92400e}
+    .b-fail{background:#fef2f2;color:#991b1b}
+    .muted{color:#6b7280}
+    .text-dark{color:#111827}
   </style>
-</head>
-<body>
-  <header>
-    <div>Hi, <strong>{{ $user->name }}</strong></div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <a href="{{ route('profile.index') }}" class="btn" style="background:#6b7280;">Profile</a>
-      <form method="post" action="{{ route('logout') }}" style="margin:0">
-        @csrf
-        <button class="btn" type="submit">Logout</button>
-      </form>
-    </div>
-  </header>
   <div class="container">
     
     <!-- Limit Warnings -->
@@ -45,89 +27,87 @@
 
     <!-- Transaction Limits Overview -->
     @if(isset($limitStatus['limits']))
-    <div style="background:#1e293b;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #334155;">
-      <h3 style="margin:0 0 16px 0;color:#f8fafc;">📊 Your Transaction Limits</h3>
+    <div style="background:#ffffff;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #e5e7eb;">
+      <h3 class="text-dark" style="margin:0 0 16px 0;">📊 Your Transaction Limits</h3>
       
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
         <!-- Daily Limits -->
-        <div style="background:#0f172a;padding:16px;border-radius:8px;border:1px solid #1e293b;">
-          <h4 style="margin:0 0 12px 0;color:#60a5fa;">Daily Limits</h4>
+        <div style="background:#f8fafc;padding:16px;border-radius:8px;border:1px solid #e5e7eb;">
+          <h4 class="text-dark" style="margin:0 0 12px 0;">Daily Limits</h4>
           
           <!-- Daily Amount -->
           <div style="margin-bottom:12px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-              <span style="color:#cbd5e1;font-size:14px;">Amount</span>
-              <span style="color:#f8fafc;font-size:14px;">{{ number_format($limitStatus['usage']['daily_amount']) }} / {{ number_format($limitStatus['limits']['daily_limit_xaf']) }} XAF</span>
+              <span class="text-dark" style="font-size:14px;">Amount</span>
+              <span class="text-dark" style="font-size:14px;">{{ number_format($limitStatus['usage']['daily_amount']) }} / {{ number_format($limitStatus['limits']['daily_limit_xaf']) }} XAF</span>
             </div>
-            <div style="background:#374151;height:8px;border-radius:4px;overflow:hidden;">
+            <div style="background:#e5e7eb;height:8px;border-radius:4px;overflow:hidden;">
               <div style="background:{{ $limitStatus['utilization']['daily_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['daily_percentage']) }}%;transition:width 0.3s ease;"></div>
             </div>
-            <div style="color:#9ca3af;font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['daily_percentage'], 1) }}% used</div>
+            <div class="muted" style="font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['daily_percentage'], 1) }}% used</div>
           </div>
           
           <!-- Daily Count -->
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-              <span style="color:#cbd5e1;font-size:14px;">Transactions</span>
-              <span style="color:#f8fafc;font-size:14px;">{{ $limitStatus['usage']['daily_count'] }} / {{ $limitStatus['limits']['daily_count_limit'] }}</span>
-            </div>
-            <div style="background:#374151;height:8px;border-radius:4px;overflow:hidden;">
+              <span class="text-dark" style="font-size:14px;">Transactions</span>
+              <span class="text-dark" style="font-size:14px;">{{ $limitStatus['usage']['daily_count'] }} / {{ $limitStatus['limits']['daily_count_limit'] }}</span>
+            <div style="background:#e5e7eb;height:8px;border-radius:4px;overflow:hidden;">
               <div style="background:{{ $limitStatus['utilization']['daily_count_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['daily_count_percentage']) }}%;transition:width 0.3s ease;"></div>
             </div>
-            <div style="color:#9ca3af;font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['daily_count_percentage'], 1) }}% used</div>
+            <div class="muted" style="font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['daily_count_percentage'], 1) }}% used</div>
           </div>
         </div>
 
         <!-- Monthly Limits -->
-        <div style="background:#0f172a;padding:16px;border-radius:8px;border:1px solid #1e293b;">
-          <h4 style="margin:0 0 12px 0;color:#34d399;">Monthly Limits</h4>
+        <div style="background:#f8fafc;padding:16px;border-radius:8px;border:1px solid #e5e7eb;">
+          <h4 class="text-dark" style="margin:0 0 12px 0;">Monthly Limits</h4>
           
-          <!-- Monthly Amount -->
           <div style="margin-bottom:12px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-              <span style="color:#cbd5e1;font-size:14px;">Amount</span>
-              <span style="color:#f8fafc;font-size:14px;">{{ number_format($limitStatus['usage']['monthly_amount']) }} / {{ number_format($limitStatus['limits']['monthly_limit_xaf']) }} XAF</span>
+              <span class="text-dark" style="font-size:14px;">Amount</span>
+              <span class="text-dark" style="font-size:14px;">{{ number_format($limitStatus['usage']['monthly_amount']) }} / {{ number_format($limitStatus['limits']['monthly_limit_xaf']) }} XAF</span>
             </div>
             <div style="background:#374151;height:8px;border-radius:4px;overflow:hidden;">
               <div style="background:{{ $limitStatus['utilization']['monthly_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['monthly_percentage']) }}%;transition:width 0.3s ease;"></div>
             </div>
-            <div style="color:#9ca3af;font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['monthly_percentage'], 1) }}% used</div>
+            <div class="muted" style="font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['monthly_percentage'], 1) }}% used</div>
           </div>
           
           <!-- Monthly Count -->
           <div>
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-              <span style="color:#cbd5e1;font-size:14px;">Transactions</span>
-              <span style="color:#f8fafc;font-size:14px;">{{ $limitStatus['usage']['monthly_count'] }} / {{ $limitStatus['limits']['monthly_count_limit'] }}</span>
+              <span class="text-dark" style="font-size:14px;">Transactions</span>
+              <span class="text-dark" style="font-size:14px;">{{ $limitStatus['usage']['monthly_count'] }} / {{ $limitStatus['limits']['monthly_count_limit'] }}</span>
             </div>
             <div style="background:#374151;height:8px;border-radius:4px;overflow:hidden;">
               <div style="background:{{ $limitStatus['utilization']['monthly_count_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['monthly_count_percentage']) }}%;transition:width 0.3s ease;"></div>
             </div>
-            <div style="color:#9ca3af;font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['monthly_count_percentage'], 1) }}% used</div>
+            <div class="muted" style="font-size:12px;margin-top:2px;">{{ number_format($limitStatus['utilization']['monthly_count_percentage'], 1) }}% used</div>
           </div>
         </div>
 
         <!-- 30-Day Statistics -->
         @if(isset($userStats))
-        <div style="background:#0f172a;padding:16px;border-radius:8px;border:1px solid #1e293b;">
-          <h4 style="margin:0 0 12px 0;color:#fbbf24;">30-Day Statistics</h4>
+        <div style="background:#f8fafc;padding:16px;border-radius:8px;border:1px solid #e5e7eb;">
+          <h4 class="text-dark" style="margin:0 0 12px 0;">30-Day Statistics</h4>
           
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
             <div>
-              <div style="color:#cbd5e1;">Total Sent</div>
-              <div style="color:#f8fafc;font-weight:600;">{{ number_format($userStats['successful_amount']) }} XAF</div>
+              <div class="muted">Total Sent</div>
+              <div class="text-dark" style="font-weight:600;">{{ number_format($userStats['successful_amount']) }} XAF</div>
             </div>
             <div>
-              <div style="color:#cbd5e1;">Success Rate</div>
-              <div style="color:#f8fafc;font-weight:600;">{{ number_format($userStats['success_rate'], 1) }}%</div>
+              <div class="muted">Success Rate</div>
+              <div class="text-dark" style="font-weight:600;">{{ number_format($userStats['success_rate'], 1) }}%</div>
             </div>
             <div>
-              <div style="color:#cbd5e1;">Transactions</div>
-              <div style="color:#f8fafc;font-weight:600;">{{ $userStats['successful_count'] }}</div>
+              <div class="muted">Transactions</div>
+              <div class="text-dark" style="font-weight:600;">{{ $userStats['successful_count'] }}</div>
             </div>
             <div>
-              <div style="color:#cbd5e1;">Active Days</div>
-              <div style="color:#f8fafc;font-weight:600;">{{ $userStats['active_days'] }}</div>
+              <div class="muted">Active Days</div>
+              <div class="text-dark" style="font-weight:600;">{{ $userStats['active_days'] }}</div>
             </div>
           </div>
         </div>
@@ -196,5 +176,4 @@
     </table>
 
   </div>
-</body>
-</html>
+@endsection
