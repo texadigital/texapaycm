@@ -11,6 +11,12 @@ Route::get('/', function () {
     return redirect()->route('transfer.bank');
 });
 
+// Admin-friendly receipt route (avoid redirect.admins so admins can view receipts)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/admin/transfer/{transfer}/receipt', [\App\Http\Controllers\TransferController::class, 'showReceipt'])
+        ->name('admin.transfer.receipt');
+});
+
 Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(function () {
     Route::get('/bank', [\App\Http\Controllers\TransferController::class, 'showBankForm'])->name('transfer.bank');
     Route::post('/bank/verify', [\App\Http\Controllers\TransferController::class, 'verifyBank'])->name('transfer.bank.verify');
@@ -31,6 +37,9 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
 Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
+// PIN challenge for users with PIN enabled
+Route::get('/login/pin', [\App\Http\Controllers\AuthController::class, 'showPinChallenge'])->name('login.pin.show');
+Route::post('/login/pin', [\App\Http\Controllers\AuthController::class, 'verifyPinChallenge'])->name('login.pin.verify');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
 Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');

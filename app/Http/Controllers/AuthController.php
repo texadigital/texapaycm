@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Transfer;
+use App\Models\LoginHistory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,6 +16,54 @@ class AuthController extends Controller
     public function showRegister()
     {
         return view('auth.register');
+    }
+
+    public function showPinChallenge(Request $request)
+    {
+        $userId = $request->session()->get('pin_challenge_user');
+        if (!$userId) {
+            return redirect()->route('login.show');
+        }
+        $user = User::find($userId);
+        if (!$user) {
+            return redirect()->route('login.show');
+        }
+        return view('auth.pin', ['user' => $user]);
+    }
+
+    public function verifyPinChallenge(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'pin' => ['required','digits_between:4,6'],
+        ]);
+        $userId = $request->session()->get('pin_challenge_user');
+        $expires = $request->session()->get('pin_challenge_expires');
+        if (!$userId || ($expires && now()->greaterThan($expires))) {
+            return redirect()->route('login.show')->withErrors(['pin' => 'PIN challenge expired. Please login again.']);
+        }
+        $user = User::find($userId);
+        if (!$user) {
+            return redirect()->route('login.show')->withErrors(['pin' => 'Session invalid.']);
+        }
+        $settings = $user->securitySettings;
+        $hash = $settings?->pin_hash ?: $user->pin_hash;
+        if (!$hash || !Hash::check($request->string('pin'), $hash)) {
+            return back()->withErrors(['pin' => 'Invalid PIN']);
+        }
+        // Success: complete login
+        Auth::login($user, true);
+        try {
+            LoginHistory::create([
+                'user_id' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+                'login_method' => 'password+pin',
+                'status' => 'success',
+                'device_info' => null,
+            ]);
+        } catch (\Throwable $e) { /* swallow */ }
+        $request->session()->forget(['pin_challenge_user','pin_challenge_expires']);
+        return redirect()->intended(route('dashboard'));
     }
 
     public function register(Request $request): RedirectResponse
@@ -58,10 +107,52 @@ class AuthController extends Controller
 
         $user = User::where('phone', $phone)->first();
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            // Record failed login
+            try {
+                LoginHistory::create([
+                    'user_id' => $user?->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => (string) $request->userAgent(),
+                    'login_method' => 'password',
+                    'status' => 'failed',
+                    'device_info' => null,
+                ]);
+            } catch (\Throwable $e) { /* swallow */ }
             return back()->withInput()->withErrors(['phone' => 'Invalid phone or password']);
         }
 
+        // If PIN is enabled for this user, redirect to PIN challenge instead of logging in now
+        $settings = $user->securitySettings;
+        if ($settings && $settings->pin_enabled && !empty($settings->pin_hash)) {
+            // Store challenge state
+            $request->session()->put('pin_challenge_user', $user->id);
+            $request->session()->put('pin_challenge_expires', now()->addMinutes(10));
+            // Log challenge event
+            try {
+                LoginHistory::create([
+                    'user_id' => $user->id,
+                    'ip_address' => $request->ip(),
+                    'user_agent' => (string) $request->userAgent(),
+                    'login_method' => 'password',
+                    'status' => 'challenge',
+                    'device_info' => null,
+                ]);
+            } catch (\Throwable $e) { /* swallow */ }
+            return redirect()->route('login.pin.show');
+        }
+
+        // Otherwise, log in directly
         Auth::login($user, true);
+        try {
+            LoginHistory::create([
+                'user_id' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+                'login_method' => 'password',
+                'status' => 'success',
+                'device_info' => null,
+            ]);
+        } catch (\Throwable $e) { /* swallow */ }
         // If the user is an admin, send them to the Filament admin panel
         if ((bool) ($user->is_admin ?? false)) {
             return redirect('/admin');

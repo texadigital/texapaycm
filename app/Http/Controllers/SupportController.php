@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Faq;
 use App\Models\SupportTicket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\SupportTicketSubmitted;
 
 class SupportController extends Controller
 {
@@ -33,6 +35,18 @@ class SupportController extends Controller
             'message' => $validated['message'],
             'priority' => $validated['priority'] ?? 'normal',
         ]);
+
+        // Email notifications
+        try {
+            $supportEmail = config('mail.support_address', env('SUPPORT_EMAIL', 'support@texa.ng'));
+            Mail::to($supportEmail)->send(new SupportTicketSubmitted($ticket));
+            // Acknowledgement to user (if email available)
+            if ($request->user()->email) {
+                Mail::to($request->user()->email)->send(new SupportTicketSubmitted($ticket));
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send support ticket emails', ['error' => $e->getMessage()]);
+        }
 
         return redirect()->route('support.tickets')->with('success', 'Ticket submitted.');
     }
