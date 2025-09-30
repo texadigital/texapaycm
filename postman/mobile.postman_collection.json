@@ -226,11 +226,127 @@
         "header": [{ "key": "Accept", "value": "application/json" }],
         "url": { "raw": "{{baseUrl}}/api/mobile/support/help", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","help"] }
       }
+    },
+    {
+      "name": "Security - Show",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security"] }
+      }
+    },
+    {
+      "name": "Security - Set/Change PIN",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "currentPin", "value": "" },
+            { "key": "newPin", "value": "1234" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/pin", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","pin"] }
+      }
+    },
+    {
+      "name": "Security - Change Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "currentPassword", "value": "Passw0rd!" },
+            { "key": "newPassword", "value": "NewPassw0rd!" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/password", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","password"] }
+      }
+    },
+    {
+      "name": "Notifications - Get",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","notifications"] }
+      }
+    },
+    {
+      "name": "Notifications - Update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": { \"transfers\": true, \"promos\": true },\n  \"sms\": { \"alerts\": false },\n  \"push\": { \"alerts\": true }\n}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","notifications"] }
+      }
+    },
+    {
+      "name": "Support - Contact",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "subject", "value": "App Issue" },
+            { "key": "message", "value": "I need help with a transfer." }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/support/contact", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","contact"] }
+      }
+    },
+    {
+      "name": "Support - Tickets",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets"] }
+      }
+    },
+    {
+      "name": "Support - Show",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}"] }
+      }
+    },
+    {
+      "name": "Support - Reply",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "message", "value": "Thanks for the quick response." }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}/reply", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}","reply"] }
+      }
     }
   ],
   "variable": [
     { "key": "baseUrl", "value": "https://malika-jubilant-seriously.ngrok-free.dev" },
     { "key": "quoteId", "value": "44" },
-    { "key": "transferId", "value": "33" }
+    { "key": "transferId", "value": "33" },
+    { "key": "ticketId", "value": "1" }
   ]
 }
