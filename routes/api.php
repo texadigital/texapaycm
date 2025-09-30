@@ -73,11 +73,33 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
 
         // Profile
         Route::get('/profile', [\App\Http\Controllers\Api\ProfileController::class, 'show'])->name('api.mobile.profile.show');
+        // Security
+        Route::get('/profile/security', [\App\Http\Controllers\Api\SecurityController::class, 'show'])->name('api.mobile.profile.security.show');
+        Route::post('/profile/security/pin', [\App\Http\Controllers\Api\SecurityController::class, 'updatePin'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.profile.security.pin');
+        Route::post('/profile/security/password', [\App\Http\Controllers\Api\SecurityController::class, 'updatePassword'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.profile.security.password');
+
+        // Notifications
+        Route::get('/profile/notifications', [\App\Http\Controllers\Api\ProfileController::class, 'notifications'])->name('api.mobile.profile.notifications');
+        Route::put('/profile/notifications', [\App\Http\Controllers\Api\ProfileController::class, 'updateNotifications'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.profile.notifications.update');
 
         // Policies
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
 
         // Support (read-only help)
         Route::get('/support/help', [\App\Http\Controllers\Api\SupportController::class, 'help'])->name('api.mobile.support.help');
+        Route::post('/support/contact', [\App\Http\Controllers\Api\SupportController::class, 'contact'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.support.contact');
+        Route::get('/support/tickets', [\App\Http\Controllers\Api\SupportController::class, 'index'])->name('api.mobile.support.tickets');
+        Route::get('/support/tickets/{ticket}', [\App\Http\Controllers\Api\SupportController::class, 'show'])->name('api.mobile.support.tickets.show');
+        Route::post('/support/tickets/{ticket}/reply', [\App\Http\Controllers\Api\SupportController::class, 'reply'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.support.tickets.reply');
     });
 });

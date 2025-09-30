@@ -306,6 +306,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfileResponse'
+  /api/mobile/profile/security:
+    get:
+      summary: Get security status (PIN / 2FA)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityStatus'
+  /api/mobile/profile/security/pin:
+    post:
+      summary: Set or change PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePinRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpdatePinRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
+  /api/mobile/profile/security/password:
+    post:
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UpdatePasswordRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
+  /api/mobile/profile/notifications:
+    get:
+      summary: Get notification preferences
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPrefs'
+    put:
+      summary: Update notification preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPrefs'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  preferences: { $ref: '#/components/schemas/NotificationPrefs' }
   /api/mobile/policies:
     get:
       summary: Get policy links and versions
@@ -326,8 +402,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HelpTopics'
+  /api/mobile/support/contact:
+    post:
+      summary: Create a support ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportContactRequest'
+      responses:
+        '200':
+          description: OK
+  /api/mobile/support/tickets:
+    get:
+      summary: List support tickets
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/SupportTicketSummary' }
+                  meta:
+                    type: object
+  /api/mobile/support/tickets/{ticket}:
+    get:
+      summary: Show a ticket and its messages
+      parameters:
+        - in: path
+          name: ticket
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketDetail'
+  /api/mobile/support/tickets/{ticket}/reply:
+    post:
+      summary: Reply to a support ticket
+      parameters:
+        - in: path
+          name: ticket
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportReplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SupportReplyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/SupportMessage' }
 components:
   schemas:
+    SecurityStatus:
+      type: object
+      properties:
+        pinEnabled: { type: boolean }
+        twoFactorEnabled: { type: boolean }
+        lastSecurityUpdate: { type: string, format: date-time, nullable: true }
+    UpdatePinRequest:
+      type: object
+      properties:
+        currentPin: { type: string, nullable: true }
+        newPin: { type: string }
+    UpdatePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string }
+    NotificationPrefs:
+      type: object
+      properties:
+        email:
+          type: object
+          additionalProperties: { type: boolean }
+        sms:
+          type: object
+          additionalProperties: { type: boolean }
+        push:
+          type: object
+          additionalProperties: { type: boolean }
+    SupportContactRequest:
+      type: object
+      required: [subject, message]
+      properties:
+        subject: { type: string }
+        message: { type: string }
+    SupportTicketSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        subject: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastReplyAt: { type: string, format: date-time, nullable: true }
+    SupportMessage:
+      type: object
+      properties:
+        from: { type: string, enum: [user, admin] }
+        body: { type: string }
+        at: { type: string, format: date-time }
+    SupportTicketDetail:
+      type: object
+      properties:
+        id: { type: integer }
+        subject: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        createdAt: { type: string, format: date-time }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/SupportMessage' }
     DashboardSummary:
       type: object
       properties:
