@@ -7,7 +7,10 @@ use App\Models\Transfer;
 use App\Services\OpenExchangeRates;
 use App\Services\PawaPay;
 use App\Services\SafeHaven;
+use App\Models\AdminSetting;
+use App\Services\PricingEngine;
 use App\Services\RefundService;
+use App\Services\LimitCheckService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class TransferController extends Controller
 {
@@ -28,6 +32,66 @@ class TransferController extends Controller
             'error' => session('transfer.error'),
         ];
         return view('transfer.bank', $data);
+    }
+
+    /**
+     * Poll pay-in (deposit) status from PawaPay and update the transfer accordingly.
+     * If completed, automatically initiate payout to the recipient.
+     */
+    public function payinStatus(Request $request, Transfer $transfer, \App\Services\PawaPay $pawa, SafeHaven $safeHaven)
+    {
+        // Must have a payin_ref (depositId)
+        if (!$transfer->payin_ref) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'No pay-in reference to check.'], 400);
+            }
+            return back()->with('error', 'No pay-in reference to check.');
+        }
+
+        $statusResp = $pawa->getPayInStatus($transfer->payin_ref);
+        $status = $statusResp['status'] ?? 'pending';
+        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+        $timeline[] = [
+            'state' => 'payin_status_check',
+            'at' => now()->toIso8601String(),
+            'status' => $status,
+            'raw' => $statusResp['raw'] ?? null,
+        ];
+
+        if ($status === 'success') {
+            // Mark payin completed and proceed to payout
+            $transfer->update([
+                'payin_status' => 'success',
+                'status' => 'payout_pending',
+                'payin_at' => now(),
+                'timeline' => $timeline,
+            ]);
+
+            // Reuse payout initiation flow
+            return $this->initiatePayout($request, $transfer, $safeHaven);
+        } elseif ($status === 'failed') {
+            $reason = $statusResp['raw']['message'] ?? 'Payment failed';
+            $timeline[] = [
+                'state' => 'payin_failed',
+                'at' => now()->toIso8601String(),
+                'reason' => $reason,
+            ];
+            $transfer->update([
+                'payin_status' => 'failed',
+                'status' => 'failed',
+                'timeline' => $timeline,
+            ]);
+
+            return redirect()->route('transfer.receipt', $transfer)->with('error', $reason);
+        }
+
+        // Still pending
+        $transfer->update([
+            'payin_status' => 'pending',
+            'status' => 'payin_pending',
+            'timeline' => $timeline,
+        ]);
+        return redirect()->route('transfer.receipt', $transfer)->with('info', 'Payment still pending.');
     }
 
     public function verifyBank(Request $request, SafeHaven $safeHaven): RedirectResponse
@@ -80,7 +144,12 @@ class TransferController extends Controller
             }
         }
 
-        return view('transfer.quote', compact('bankCode','accountNumber','accountName','bankName','quote','remaining'));
+        // Get user's limit warnings
+        $limitCheckService = app(LimitCheckService::class);
+        $limitWarnings = $limitCheckService->getLimitWarnings(auth()->user());
+        $limitStatus = $limitCheckService->getUserLimitStatus(auth()->user());
+
+        return view('transfer.quote', compact('bankCode','accountNumber','accountName','bankName','quote','remaining','limitWarnings','limitStatus'));
     }
 
     public function createQuote(Request $request, OpenExchangeRates $oxr): RedirectResponse
@@ -99,23 +168,44 @@ class TransferController extends Controller
         $usdToNgn = (float) $fx['usd_to_ngn'];
         $cross = $usdToNgn / $usdToXaf; // XAF->NGN
 
-        // Basic margin & fees from env for now (to be moved to Settings model)
-        $marginBps = (int) (env('FX_MARGIN_BPS', 0));
-        $adjustedRate = $cross * (1 - ($marginBps / 10000));
-
         $amountXaf = (int) round($validated['amount_xaf']);
-        $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
-        $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
-        $percentFee = (int) floor($amountXaf * $percentBps / 10000);
-        $feeTotal = $fixedFee + $percentFee;
 
-        $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
-        $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
-        $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
+        // Feature-flagged pricing v2 path
+        $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
+        if ($pricingV2) {
+            $engine = app(PricingEngine::class);
+            $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
+                'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
+            ]);
+            $adjustedRate = (float) $calc['effective_rate'];
+            $feeTotal = (int) $calc['fee_amount_xaf'];
+            $totalPayXaf = (int) $calc['total_pay_xaf'];
+            $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
 
-        $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+            \Log::info('pricing_v2_applied', [
+                'amount_xaf' => $amountXaf,
+                'fx_margin_bps' => (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0)),
+                'fee_amount_xaf' => $feeTotal,
+                'effective_rate' => $adjustedRate,
+            ]);
+        } else {
+            // Legacy env-based pricing
+            $marginBps = (int) (env('FX_MARGIN_BPS', 0));
+            $adjustedRate = $cross * (1 - ($marginBps / 10000));
 
-        $ttl = (int) env('QUOTE_TTL_SECONDS', 90);
+            $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
+            $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
+            $percentFee = (int) floor($amountXaf * $percentBps / 10000);
+            $feeTotal = $fixedFee + $percentFee;
+
+            $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
+            $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
+            $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
+            $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+        }
+
+        // TTL: prefer pricing setting when v2, else env
+        $ttl = (int) AdminSetting::getValue('pricing.quote_ttl_secs', (int) env('QUOTE_TTL_SECONDS', 90));
         $userId = auth()->id();
         if (!$userId) {
             $userId = \App\Models\User::query()->min('id');
@@ -139,6 +229,8 @@ class TransferController extends Controller
         session(['transfer.quote_id' => $quote->id]);
         return redirect()->route('transfer.quote')->with('quote_ready', true);
     }
+
+    
 
     public function confirmPayIn(Request $request, PawaPay $pawa): RedirectResponse
     {
@@ -262,6 +354,18 @@ class TransferController extends Controller
                 'provider' => $provider,
                 'timeline' => [
                     ['state' => 'quote_created', 'at' => now()->toIso8601String()],
+                    [
+                        'state' => 'pricing_breakdown',
+                        'at' => now()->toIso8601String(),
+                        'interbank_rate' => (float) $quote->cross_rate_xaf_to_ngn,
+                        'effective_rate' => (float) $quote->adjusted_rate_xaf_to_ngn,
+                        'margin_percent' => ($quote->cross_rate_xaf_to_ngn > 0)
+                            ? max(0.0, (1 - ($quote->adjusted_rate_xaf_to_ngn / $quote->cross_rate_xaf_to_ngn)) * 100)
+                            : 0.0,
+                        'fee_amount_xaf' => (int) $quote->fee_total_xaf,
+                        'total_pay_xaf' => (int) $quote->total_pay_xaf,
+                        'receive_ngn_minor' => (int) $quote->receive_ngn_minor,
+                    ],
                     ['state' => 'payin_pending', 'at' => now()->toIso8601String(), 'msisdn' => $msisdn, 'provider' => $provider],
                 ],
             ]);
@@ -284,6 +388,9 @@ class TransferController extends Controller
                 ->with('info', 'A transaction with this quote already exists.');
         }
 
+        // Note: Transaction will be recorded in limits system only when it succeeds
+        // This happens via webhook callbacks when payment status changes to success
+
         // Generate a unique reference for this transaction
         $reference = (string) Str::uuid();
         
@@ -299,7 +406,8 @@ class TransferController extends Controller
             'customer_message' => env('PAWAPAY_CUSTOMER_MESSAGE', 'TexaPay Payment'),
         ]);
 
-        if (!isset($resp['success']) || $resp['success'] !== true) {
+        // PawaPay v2 returns status: ACCEPTED -> we map to 'pending'. Only treat explicit 'failed' as failure
+        if (($resp['status'] ?? 'failed') === 'failed') {
             // Log the failure
             $errorMessage = $resp['message'] ?? 'Failed to initiate payment';
             $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
@@ -509,8 +617,14 @@ class TransferController extends Controller
                     ];
                     $updateData['timeline'] = $timeline;
                     
-                    Log::info('Payout completed successfully', [
+                    // Record successful transaction in limits system (both payin and payout succeeded)
+                    $limitCheckService = app(LimitCheckService::class);
+                    $limitCheckService->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+                    
+                    Log::info('Payout completed successfully and recorded in limits system', [
                         'transfer_id' => $transfer->id,
+                        'user_id' => $transfer->user_id,
+                        'amount' => $transfer->amount_xaf,
                         'idempotency_key' => $idempotencyKey,
                         'payout_ref' => $updateData['payout_ref']
                     ]);
@@ -526,24 +640,34 @@ class TransferController extends Controller
                         'response' => $resp['raw'] ?? null
                     ];
                     $updateData['timeline'] = $timeline;
-                    
+                    // Ensure failed statuses are persisted before attempting refund
+                    $updateData['payout_status'] = 'failed';
+                    $updateData['status'] = 'failed';
+
                     Log::error('Payout failed', [
                         'transfer_id' => $transfer->id,
                         'idempotency_key' => $idempotencyKey,
                         'error' => $errorMsg,
                         'response' => $resp['raw'] ?? null
                     ]);
-                    
+
+                    // Persist failure to make refund eligibility pass
+                    $transfer->update($updateData);
+
                     // If payin was successful but payout failed, initiate refund
                     if ($transfer->payin_status === 'success') {
-                        $this->initiateRefund($transfer, $refundService, [
+                        $this->initiateRefund($transfer->fresh(), $refundService, [
                             'error' => $errorMsg,
                             'response' => $resp['raw'] ?? null
                         ]);
                     }
-                    
-                    // Throw exception to trigger rollback
-                    throw new \Exception("Payout failed: " . $errorMsg);
+
+                    // Return error response instead of throwing (we've already persisted failure)
+                    return $this->jsonOrRedirect($request, [
+                        'status' => 'error',
+                        'message' => 'NGN payout failed: ' . $errorMsg,
+                        'transfer_id' => $transfer->id,
+                    ], 400);
                 }
 
                 // Update the transfer
@@ -671,9 +795,10 @@ class TransferController extends Controller
         }
 
         $method = $status >= 400 ? 'error' : 'info';
+        $transferParam = $request->route('transfer');
         return redirect()
-            ->route('transfer.receipt', ['transfer' => $request->route('transfer')])
-            ->with($method, $data['message']);
+            ->route('transfer.receipt', $transferParam)
+            ->with($method, $data['message'] ?? null);
     }
 
     public function payoutStatus(Request $request, Transfer $transfer, SafeHaven $safeHaven)
@@ -702,6 +827,18 @@ class TransferController extends Controller
             $update['payout_status'] = 'success';
             $update['payout_completed_at'] = now();
             $message = 'Payout completed successfully';
+            
+            // Record successful transaction in limits system idempotently
+            $limitCheckService = app(LimitCheckService::class);
+            $limitCheckService->recordCompletedTransferOnce($transfer);
+            
+            Log::info('Complete transaction recorded in limits system (idempotent)', [
+                'transfer_id' => $transfer->id,
+                'user_id' => $transfer->user_id,
+                'amount' => $transfer->amount_xaf,
+                'payin_status' => $transfer->payin_status,
+                'payout_status' => 'success'
+            ]);
         } elseif ($resp['status'] === 'failed') {
             $update['status'] = 'failed';
             $update['payout_status'] = 'failed';
@@ -725,5 +862,71 @@ class TransferController extends Controller
         return redirect()
             ->route('transfer.receipt', $transfer)
             ->with('info', 'Payout status: ' . $resp['status']);
+    }
+
+    /**
+     * Live timeline JSON endpoint for polling.
+     */
+    public function timeline(Request $request, Transfer $transfer)
+    {
+        // Owner guard (route already under auth + redirect.admins). Double-check ownership.
+        if (auth()->check() && !((bool) (auth()->user()->is_admin ?? false))) {
+            abort_if($transfer->user_id !== auth()->id(), 403);
+        }
+        $data = [
+            'id' => $transfer->id,
+            'status' => $transfer->status,
+            'payin_status' => $transfer->payin_status,
+            'payout_status' => $transfer->payout_status,
+            'timeline' => $transfer->timeline ?? [],
+            'updated_at' => optional($transfer->updated_at)->toIso8601String(),
+        ];
+        return response()->json($data);
+    }
+
+    /**
+     * Download single receipt as PDF (fallback to HTML if DomPDF not installed).
+     */
+    public function receiptPdf(Request $request, Transfer $transfer)
+    {
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_PDF', true), FILTER_VALIDATE_BOOLEAN);
+        abort_unless($enabled, 404);
+
+        $data = ['transfer' => $transfer];
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('transfer.receipt_pdf', $data);
+            $filename = 'receipt-' . $transfer->id . '-' . now()->format('Ymd-Hi') . '.pdf';
+            return $pdf->download($filename);
+        }
+        // Fallback: return printable HTML
+        return response()->view('transfer.receipt_pdf', $data);
+    }
+
+    /**
+     * Generate a temporary signed share link for this receipt.
+     */
+    public function shareLink(Request $request, Transfer $transfer)
+    {
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_SHARE', true), FILTER_VALIDATE_BOOLEAN);
+        abort_unless($enabled, 404);
+
+        // Owner guard
+        abort_if($transfer->user_id !== auth()->id(), 403);
+
+        $days = (int) env('RECEIPT_SHARE_TTL_DAYS', 7);
+        $expires = now()->addDays(max(1, $days));
+        $url = URL::temporarySignedRoute('transfer.receipt.shared', $expires, ['transfer' => $transfer->id]);
+        return response()->json(['url' => $url, 'expires_at' => $expires->toIso8601String()]);
+    }
+
+    /**
+     * Public, signed receipt view with masked data and no account actions.
+     */
+    public function showSharedReceipt(Request $request, Transfer $transfer): View
+    {
+        return view('transfer.receipt', [
+            'transfer' => $transfer,
+            'shared' => true,
+        ]);
     }
 }

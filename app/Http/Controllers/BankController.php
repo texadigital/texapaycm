@@ -14,30 +14,57 @@ class BankController extends Controller
      */
     public function list(SafeHaven $safeHaven)
     {
-        $banks = Cache::remember('banks:safehaven:list', 60 * 60 * 24, function () use ($safeHaven) {
+        // Optional refresh to bypass cache: /api/banks?refresh=1
+        $forceRefresh = (bool) request()->boolean('refresh', false);
+
+        if ($forceRefresh) {
+            Cache::forget('banks:safehaven:list');
+        }
+
+        // Try cache first
+        $banks = Cache::get('banks:safehaven:list');
+
+        // If cache miss or refresh requested, fetch live from Safe Haven
+        if ($forceRefresh || !is_array($banks) || empty($banks)) {
             $resp = $safeHaven->listBanks();
             $data = $resp['data'] ?? $resp['banks'] ?? $resp;
-            if (!is_array($data)) {
-                $data = [];
-            }
-            // Normalize
-            return array_map(function ($b) {
-                return [
-                    'bankCode' => $b['bankCode'] ?? ($b['routingKey'] ?? null),
-                    'name' => $b['name'] ?? '',
-                    'aliases' => $b['alias'] ?? [],
-                    'categoryId' => $b['categoryId'] ?? null,
+
+            $valid = is_array($data) && (!isset($resp['status']) || $resp['status'] !== 'failed');
+            if ($valid && count($data) > 0) {
+                $normalized = array_map(function ($b) {
+                    return [
+                        'bankCode' => $b['bankCode'] ?? ($b['routingKey'] ?? null),
+                        'name' => $b['name'] ?? '',
+                        'aliases' => $b['alias'] ?? [],
+                        'categoryId' => $b['categoryId'] ?? null,
+                    ];
+                }, $data);
+                // Cache only successful, non-empty lists
+                Cache::put('banks:safehaven:list', $normalized, 60 * 60 * 24);
+                $banks = $normalized;
+            } else {
+                // Graceful fallback (includes Safe Haven sandbox bank for testing) - DO NOT cache
+                $banks = [
+                    ['bankCode' => '999240', 'name' => 'SAFE HAVEN SANDBOX BANK', 'aliases' => ['SANDBOX'], 'categoryId' => null],
+                    ['bankCode' => '000014', 'name' => 'Access Bank', 'aliases' => [], 'categoryId' => null],
+                    ['bankCode' => '000004', 'name' => 'GTBank', 'aliases' => [], 'categoryId' => null],
+                    ['bankCode' => '000013', 'name' => 'Fidelity Bank', 'aliases' => [], 'categoryId' => null],
+                    ['bankCode' => '000016', 'name' => 'First Bank of Nigeria', 'aliases' => [], 'categoryId' => null],
+                    ['bankCode' => '000001', 'name' => 'Sterling Bank', 'aliases' => [], 'categoryId' => null],
                 ];
-            }, $data);
-        });
+            }
+        }
 
         // Optional query filter
         $q = trim((string) request('q', ''));
         if ($q !== '') {
-            $qLower = mb_strtolower($q);
-            $banks = array_values(array_filter($banks, function ($b) use ($qLower) {
-                $name = mb_strtolower($b['name'] ?? '');
-                $aliases = array_map('mb_strtolower', $b['aliases'] ?? []);
+            $toLower = function ($s) {
+                return function_exists('mb_strtolower') ? mb_strtolower((string) $s) : strtolower((string) $s);
+            };
+            $qLower = $toLower($q);
+            $banks = array_values(array_filter($banks, function ($b) use ($qLower, $toLower) {
+                $name = $toLower($b['name'] ?? '');
+                $aliases = array_map($toLower, $b['aliases'] ?? []);
                 return Str::contains($name, $qLower) || collect($aliases)->contains(function ($a) use ($qLower) { return Str::contains($a, $qLower); });
             }));
         }

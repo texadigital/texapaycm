@@ -1,12 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quote • XAF → NGN</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('content')
     <style>
         body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: #0b1020; color: #e6e8ec; margin: 0; }
         .container { max-width: 640px; margin: 40px auto; padding: 24px; background: #121836; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
@@ -28,8 +22,6 @@
         .kv strong { color: #e6e8ec; }
         .countdown { font-weight: 600; color: #f59e0b; }
     </style>
-</head>
-<body>
 <div class="container">
     <h1>Quote • XAF → NGN</h1>
     <p class="muted">Recipient: <strong>{{ $accountName }}</strong> • {{ $bankName }} • {{ $accountNumber }}<?php
@@ -38,6 +30,38 @@
 
     @if(session('error'))
         <div class="alert alert-error">{{ session('error') }}</div>
+    @endif
+
+    <!-- Limit Warnings -->
+    @if(!empty($limitWarnings))
+        @foreach($limitWarnings as $warning)
+            <div style="background:{{ $warning['level'] === 'critical' ? '#dc2626' : '#f59e0b' }};color:#fff;padding:12px;border-radius:8px;margin-bottom:16px;">
+                <strong>{{ $warning['level'] === 'critical' ? '⚠️ Critical' : '⚠️ Warning' }}:</strong> {{ $warning['message'] }}
+            </div>
+        @endforeach
+    @endif
+
+    <!-- Quick Limit Status -->
+    @if(isset($limitStatus['limits']))
+    <div style="background:#1e293b;border-radius:8px;padding:16px;margin-bottom:16px;border:1px solid #334155;">
+        <h4 style="margin:0 0 12px 0;color:#f8fafc;">📊 Today's Usage</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:14px;">
+            <div>
+                <div style="color:#cbd5e1;">Daily Amount</div>
+                <div style="color:#f8fafc;font-weight:600;">{{ number_format($limitStatus['usage']['daily_amount']) }} / {{ number_format($limitStatus['limits']['daily_limit_xaf']) }} XAF</div>
+                <div style="background:#374151;height:4px;border-radius:2px;overflow:hidden;margin-top:4px;">
+                    <div style="background:{{ $limitStatus['utilization']['daily_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['daily_percentage']) }}%;"></div>
+                </div>
+            </div>
+            <div>
+                <div style="color:#cbd5e1;">Daily Transactions</div>
+                <div style="color:#f8fafc;font-weight:600;">{{ $limitStatus['usage']['daily_count'] }} / {{ $limitStatus['limits']['daily_count_limit'] }}</div>
+                <div style="background:#374151;height:4px;border-radius:2px;overflow:hidden;margin-top:4px;">
+                    <div style="background:{{ $limitStatus['utilization']['daily_count_percentage'] >= 80 ? '#ef4444' : '#10b981' }};height:100%;width:{{ min(100, $limitStatus['utilization']['daily_count_percentage']) }}%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
     @endif
 
     <div class="card">
@@ -133,5 +157,4 @@
     var expirationCheck = setInterval(checkExpiration, 10000);
 })();
 </script>
-</body>
-</html>
+@endsection

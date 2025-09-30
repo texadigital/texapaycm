@@ -86,12 +86,15 @@ class TransfersTable
                     ])
                     ->query(function ($query, array $data) {
                         return $query
-                            ->when($data['from'] ?? null, fn ($q, $date) => $q->whereDate('created_at', '>=', $date))
                             ->when($data['until'] ?? null, fn ($q, $date) => $q->whereDate('created_at', '<=', $date));
                     })
                     ->label('Created Between'),
             ])
             ->recordActions([
+                \Filament\Actions\Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->url(fn ($record) => \App\Filament\Resources\Transfers\TransferResource::getUrl('view', ['record' => $record])),
                 EditAction::make(),
             ])
             ->toolbarActions([

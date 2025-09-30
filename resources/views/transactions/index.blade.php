@@ -1,37 +1,21 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Transactions • TexaPay</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('content')
   <style>
-    body{font-family:Inter,system-ui,Arial,sans-serif;background:#0b1220;color:#e6e8ec;margin:0}
-    header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2a44}
     .container{max-width:1100px;margin:0 auto;padding:20px}
     .btn{display:inline-block;background:#2563eb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;text-decoration:none}
-    .btn-secondary{background:#374151}
+    .btn-secondary{background:#6b7280}
     .filters{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-    input,select{background:#0f172a;border:1px solid #1f2a44;color:#e6e8ec;padding:8px 10px;border-radius:8px}
+    input,select{background:#ffffff;border:1px solid #e5e7eb;color:#111827;padding:8px 10px;border-radius:8px}
     table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{padding:10px;border-bottom:1px solid #1f2a44;text-align:left}
+    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
     .badge{padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}
-    .b-success{background:#064e3b;color:#86efac}
-    .b-warn{background:#2f2a12;color:#fde68a}
-    .b-fail{background:#3a121a;color:#fecaca}
-    .muted{color:#9aa4b2}
+    .b-success{background:#e6fffa;color:#065f46}
+    .b-warn{background:#fff7ed;color:#92400e}
+    .b-fail{background:#fef2f2;color:#991b1b}
+    .muted{color:#6b7280}
     .footer{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
   </style>
-</head>
-<body>
-  <header>
-    <div><strong>Transactions</strong></div>
-    <div style="display:flex;gap:8px">
-      <a class="btn" href="{{ route('transfer.bank') }}">Send</a>
-      <a class="btn btn-secondary" href="{{ route('dashboard') }}">Back to Dashboard</a>
-    </div>
-  </header>
   <div class="container">
 
     <form method="get" action="{{ route('transactions.index') }}" class="filters">
@@ -95,5 +79,4 @@
     </div>
 
   </div>
-</body>
-</html>
+@endsection

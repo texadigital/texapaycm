@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webhooks;
 use App\Http\Controllers\Controller;
 use App\Models\Transfer;
 use App\Services\SafeHaven;
+use App\Services\LimitCheckService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,9 +34,15 @@ class PawaPayWebhookController extends Controller
             return response()->json(['ok' => true, 'duplicate' => true]);
         }
 
-        // Dispatch async job to process deposit webhook and return fast
+        // Process synchronously in dev/local to avoid pending state without a running worker
+        $sync = filter_var(env('WEBHOOKS_SYNC', true), FILTER_VALIDATE_BOOL);
+        if ($sync) {
+            \App\Jobs\ProcessPawaPayDeposit::dispatchSync($event->id, $payload);
+            return response()->json(['ok' => true, 'processed' => 'sync']);
+        }
+        // Otherwise, dispatch to queue
         dispatch(new \App\Jobs\ProcessPawaPayDeposit($event->id, $payload));
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'queued' => true]);
     }
 
     protected function handleCompletedPayment($transfer, &$timeline, $safeHaven)
@@ -62,6 +69,9 @@ class PawaPayWebhookController extends Controller
             'payin_at' => now(),
             'timeline' => $timeline
         ]);
+
+        // Note: Transaction will be recorded in limits system only when BOTH payin AND payout succeed
+        // This happens when payout is completed successfully
 
         // Initiate payout to recipient
         $this->initiatePayout($transfer, $timeline, $safeHaven);
