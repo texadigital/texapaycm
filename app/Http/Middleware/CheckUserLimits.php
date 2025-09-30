@@ -32,10 +32,14 @@ class CheckUserLimits
 
         $user = Auth::user();
         
-        // Only apply to specific transaction routes
+        // Only apply to specific transaction routes (web and mobile)
         $transactionRoutes = [
+            // Web
             'transfer.quote.create',
             'transfer.confirm',
+            // Mobile
+            'api.mobile.transfers.quote',
+            'api.mobile.transfers.confirm',
         ];
 
         if (!in_array($request->route()->getName(), $transactionRoutes)) {
@@ -117,12 +121,14 @@ class CheckUserLimits
         }
 
         // For transfer confirmation, get amount from quote
-        if ($request->route()->getName() === 'transfer.confirm') {
-            $quoteId = session('transfer.quote_id');
+        $routeName = $request->route()->getName();
+        if (in_array($routeName, ['transfer.confirm','api.mobile.transfers.confirm'], true)) {
+            // Web flow stores quote in session; mobile sends quoteId in payload
+            $quoteId = (int) ($request->input('quoteId') ?: session('transfer.quote_id'));
             if ($quoteId) {
                 $quote = \App\Models\Quote::find($quoteId);
                 if ($quote) {
-                    return $quote->amount_xaf;
+                    return (int) $quote->amount_xaf;
                 }
             }
         }

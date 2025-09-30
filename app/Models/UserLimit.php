@@ -132,13 +132,26 @@ class UserLimit extends Model
         $defaultDailyCount = AdminSetting::getValue('default_daily_count', 10);
         $defaultMonthlyCount = AdminSetting::getValue('default_monthly_count', 100);
 
-        return self::create([
-            'user_id' => $user->id,
-            'daily_limit_xaf' => $defaultDailyLimit,
-            'monthly_limit_xaf' => $defaultMonthlyLimit,
-            'daily_count_limit' => $defaultDailyCount,
-            'monthly_count_limit' => $defaultMonthlyCount,
-            'is_active' => true,
-        ]);
+        // Prevent UNIQUE(user_id) collisions if called concurrently
+        try {
+            $existing = self::where('user_id', $user->id)->first();
+            if ($existing) { return $existing; }
+
+            return self::create([
+                'user_id' => $user->id,
+                'daily_limit_xaf' => $defaultDailyLimit,
+                'monthly_limit_xaf' => $defaultMonthlyLimit,
+                'daily_count_limit' => $defaultDailyCount,
+                'monthly_count_limit' => $defaultMonthlyCount,
+                'is_active' => true,
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // If another request inserted the row in-between, return it
+            if (str_contains(strtolower($e->getMessage()), 'unique') || (int)($e->getCode()) === 23000) {
+                $row = self::where('user_id', $user->id)->first();
+                if ($row) { return $row; }
+            }
+            throw $e;
+        }
     }
 }

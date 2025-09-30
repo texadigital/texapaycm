@@ -237,7 +237,7 @@ class TransfersController extends Controller
      * Body: { quoteId: number, bankCode: string, bankName?: string, accountNumber: string, accountName?: string, msisdn: string }
      * Mirrors TransferController::confirmPayIn without web session.
      */
-    public function confirm(Request $request, PawaPay $pawa)
+    public function confirm(Request $request, PawaPay $pawa, SafeHaven $safeHaven)
     {
         if (!(bool) AdminSetting::getValue('mobile_api_enabled', false)) {
             return response()->json(['success' => false, 'code' => 'FEATURE_DISABLED', 'message' => 'Mobile API is disabled'], 403);
@@ -245,9 +245,7 @@ class TransfersController extends Controller
         $data = $request->validate([
             'quoteId' => ['required','integer','exists:quotes,id'],
             'bankCode' => ['required','string','max:32'],
-            'bankName' => ['nullable','string','max:190'],
             'accountNumber' => ['required','string','max:32'],
-            'accountName' => ['nullable','string','max:190'],
             'msisdn' => ['required','string','min:8','max:20'],
         ]);
 
@@ -303,8 +301,37 @@ class TransfersController extends Controller
                 }
             }
 
+            // Resolve recipient bank name from bankCode (ignore client-provided bankName)
+            $resolvedBankName = null;
+            $banks = Cache::get('banks:safehaven:list', []);
+            if (is_array($banks)) {
+                foreach ($banks as $b) {
+                    if (($b['bankCode'] ?? null) === $data['bankCode']) {
+                        $resolvedBankName = $b['name'] ?? null;
+                        break;
+                    }
+                }
+            }
+            if (!$resolvedBankName && $data['bankCode'] === '999240') {
+                $resolvedBankName = 'SAFE HAVEN SANDBOX BANK';
+            }
+
+            // Attempt server-side name enquiry to derive account name and reference; fallback to UNKNOWN/null
+            $resolvedAccountName = null;
+            $resolvedNameRef = null;
+            try {
+                $ne = $safeHaven->nameEnquiry($data['bankCode'], $data['accountNumber']);
+                $okNe = (bool) ($ne['success'] ?? false) || (($ne['statusCode'] ?? null) === 200);
+                if ($okNe) {
+                    $resolvedAccountName = $ne['account_name'] ?? ($ne['data']['accountName'] ?? null);
+                    $resolvedNameRef = $ne['reference'] ?? ($ne['data']['sessionId'] ?? null);
+                }
+            } catch (\Throwable $e) {
+                // ignore and fallback below
+            }
+
             // Create or reuse transfer for quote
-            $transfer = \Illuminate\Support\Facades\DB::transaction(function () use ($quote, $msisdn, $provider, $data) {
+            $transfer = \Illuminate\Support\Facades\DB::transaction(function () use ($quote, $msisdn, $provider, $data, $resolvedBankName, $resolvedAccountName, $resolvedNameRef) {
                 $existing = Transfer::where('quote_id', $quote->id)->first();
                 if ($existing) { return $existing; }
                 $userId = Auth::id() ?? (int) (\App\Models\User::query()->min('id'));
@@ -312,10 +339,11 @@ class TransfersController extends Controller
                     'user_id' => $userId,
                     'quote_id' => $quote->id,
                     'recipient_bank_code' => $data['bankCode'],
-                    'recipient_bank_name' => $data['bankName'] ?? null,
+                    'recipient_bank_name' => $resolvedBankName ?: 'UNKNOWN',
                     'recipient_account_number' => $data['accountNumber'],
-                    'recipient_account_name' => $data['accountName'] ?? null,
-                    'name_enquiry_reference' => null,
+                    'recipient_account_name' => ($resolvedAccountName && trim($resolvedAccountName) !== '') ? $resolvedAccountName : 'UNKNOWN',
+                    // Persist name enquiry ref when available to avoid JIT lookup at payout time
+                    'name_enquiry_reference' => $resolvedNameRef,
                     'amount_xaf' => $quote->amount_xaf,
                     'fee_total_xaf' => $quote->fee_total_xaf,
                     'total_pay_xaf' => $quote->total_pay_xaf,

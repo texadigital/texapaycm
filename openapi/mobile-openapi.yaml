@@ -44,6 +44,31 @@ paths:
                 $ref: '#/components/schemas/LoginResponse'
         '401':
           description: Invalid credentials
+  /api/mobile/auth/register:
+    post:
+      summary: Create a new user account (session login on success)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
   /api/mobile/auth/logout:
     post:
       summary: Logout and invalidate session
@@ -133,6 +158,12 @@ paths:
   /api/mobile/transfers/name-enquiry:
     post:
       summary: Verify beneficiary account (name enquiry)
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
       requestBody:
         required: true
         content:
@@ -149,9 +180,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NameEnquiryResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
+        '400':
+          description: Limits or validation error
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LimitsError'
+                  - type: object
+                    properties:
+                      message: { type: string }
   /api/mobile/transfers/quote:
     post:
       summary: Create a transfer quote
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
       requestBody:
         required: true
         content:
@@ -168,9 +227,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuoteResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
   /api/mobile/transfers/confirm:
     post:
       summary: Confirm and initiate pay-in
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
       requestBody:
         required: true
         content:
@@ -187,6 +264,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfirmResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
   /api/mobile/transfers/{transfer}/timeline:
     get:
       summary: Get transfer timeline
@@ -366,6 +455,12 @@ paths:
                 $ref: '#/components/schemas/NotificationPrefs'
     put:
       summary: Update notification preferences
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
       requestBody:
         required: true
         content:
@@ -382,6 +477,70 @@ paths:
                 properties:
                   success: { type: boolean }
                   preferences: { $ref: '#/components/schemas/NotificationPrefs' }
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
+  /api/mobile/support/contact:
+    post:
+      summary: Create a support ticket
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
+  /api/mobile/support/tickets/{ticket}/reply:
+    post:
+      summary: Reply to a support ticket
+      parameters:
+        - in: path
+          name: ticket
+          required: true
+          schema: { type: integer }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+          description: Required idempotency key to safely retry this request
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+        '403':
+          description: Feature disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error403'
   /api/mobile/policies:
     get:
       summary: Get policy links and versions
@@ -479,6 +638,18 @@ paths:
                     items: { $ref: '#/components/schemas/SupportMessage' }
 components:
   schemas:
+    Error401:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        code: { type: string, example: UNAUTHENTICATED }
+        message: { type: string, example: Authentication required }
+    Error403:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        code: { type: string, example: FEATURE_DISABLED }
+        message: { type: string, example: Mobile API is disabled }
     SecurityStatus:
       type: object
       properties:
@@ -769,14 +940,8 @@ components:
           type: integer
         bankCode:
           type: string
-        bankName:
-          type: string
-          nullable: true
         accountNumber:
           type: string
-        accountName:
-          type: string
-          nullable: true
         msisdn:
           type: string
           description: E.164 Cameroon MoMo without '+'
@@ -794,3 +959,24 @@ components:
               type: string
             payinRef:
               type: string
+    RegisterRequest:
+      type: object
+      required: [name, phone, password, pin]
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        password: { type: string }
+        pin: { type: string, description: 4-6 digit PIN }
+    LimitsError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: Unable to verify transaction limits. Please try again. }
+        limit_info:
+          type: object
+          properties:
+            can_transact: { type: boolean }
+            reason: { type: string }
+            limit_type: { type: string }
+        kyc_required: { type: boolean }
+        kyc_url: { type: string, nullable: true }

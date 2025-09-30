@@ -115,7 +115,21 @@ class User extends Authenticatable implements FilamentUser
      */
     public function getOrCreateLimits(): UserLimit
     {
-        return $this->userLimit ?: UserLimit::createDefaultForUser($this);
+        // If relation is already loaded and present, return it
+        if ($this->relationLoaded('userLimit') && $this->userLimit) {
+            return $this->userLimit;
+        }
+        // Attempt to fetch existing row to avoid duplicate create
+        $existing = $this->userLimit()->first();
+        if ($existing) {
+            // Cache relation for subsequent calls in the same request lifecycle
+            $this->setRelation('userLimit', $existing);
+            return $existing;
+        }
+        // Create with upsert semantics handled inside the model factory method
+        $created = UserLimit::createDefaultForUser($this);
+        $this->setRelation('userLimit', $created);
+        return $created;
     }
 
     /**

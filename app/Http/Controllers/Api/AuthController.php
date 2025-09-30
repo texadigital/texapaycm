@@ -12,6 +12,53 @@ use Illuminate\Support\Facades\Hash;
 class AuthController extends Controller
 {
     /**
+     * POST /api/mobile/auth/register
+     * Body: { name: string, phone: string, password: string, pin: 4-6 digits }
+     * Creates a new user and logs them in (session cookie), returning JSON.
+     */
+    public function register(Request $request)
+    {
+        if (!(bool) \App\Models\AdminSetting::getValue('mobile_api_enabled', false)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'FEATURE_DISABLED',
+                'message' => 'Mobile API is disabled',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'name' => ['required','string','max:190'],
+            'phone' => ['required','string','max:32','unique:users,phone'],
+            'password' => ['required','string','min:6','max:190'],
+            'pin' => ['required','string','regex:/^\d{4,6}$/'],
+        ]);
+
+        $phone = preg_replace('/\D+/', '', $data['phone']);
+        $email = $phone . '@local';
+
+        $user = User::create([
+            'name' => $data['name'],
+            'phone' => $phone,
+            'email' => $email,
+            'password' => Hash::make($data['password']),
+            'pin_hash' => Hash::make($data['pin']),
+        ]);
+
+        Auth::login($user, true);
+        $request->session()->regenerate();
+
+        return response()->json([
+            'success' => true,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'phone' => $user->phone,
+                'kycStatus' => (string) ($user->kyc_status ?? 'unverified'),
+                'kycLevel' => (int) ($user->kyc_level ?? 0),
+            ],
+        ], 201);
+    }
+    /**
      * POST /api/mobile/auth/login
      * Body: { phone: string, password: string, pin?: string }
      * Mirrors web login + optional PIN challenge. Uses session cookies.

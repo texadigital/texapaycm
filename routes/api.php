@@ -12,20 +12,27 @@ use Illuminate\Http\Request;
 | maintain session cookie after /auth/login.
 */
 
-Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
-    // Health & feature gate
+Route::middleware(['web','throttle:api','force.json','idempotency'])
+    ->prefix('mobile')
+    ->group(function () {
+    // Health & feature status endpoint should always be reachable
     Route::get('/feature', function () {
         $enabled = (bool) \App\Models\AdminSetting::getValue('mobile_api_enabled', false);
         return response()->json(['enabled' => $enabled]);
-    });
+    })->name('api.mobile.feature');
 
-    // Auth - session cookie based
-    Route::post('/auth/login', [\App\Http\Controllers\Api\AuthController::class, 'login'])
-        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-        ->name('api.mobile.auth.login');
-    Route::post('/auth/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout'])
-        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-        ->name('api.mobile.auth.logout');
+    // Gate all other endpoints behind feature flag
+    Route::middleware(['mobile.feature'])->group(function () {
+        // Auth - session cookie based
+        Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.register');
+        Route::post('/auth/login', [\App\Http\Controllers\Api\AuthController::class, 'login'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.login');
+        Route::post('/auth/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.logout');
 
     // Public banks endpoints (reuse existing logic)
     Route::get('/banks', [\App\Http\Controllers\BankController::class, 'list'])->name('api.mobile.banks');
@@ -34,8 +41,8 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
         ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
         ->name('api.mobile.banks.suggest');
 
-    // Authenticated routes
-    Route::middleware(['auth'])->group(function () {
+        // Authenticated routes
+        Route::middleware(['auth'])->group(function () {
         // Dashboard
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'summary'])->name('api.mobile.dashboard');
 
@@ -61,7 +68,7 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
             ->name('api.mobile.transfers.quote');
         Route::post('/transfers/confirm', [\App\Http\Controllers\Api\TransfersController::class, 'confirm'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->middleware(['throttle:20,1'])
+            ->middleware(['throttle:20,1', 'check.limits'])
             ->name('api.mobile.transfers.confirm');
 
         Route::get('/transfers/{transfer}/timeline', [\App\Http\Controllers\Api\TransfersController::class, 'timeline'])->name('api.mobile.transfers.timeline');
@@ -101,5 +108,8 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
         Route::post('/support/tickets/{ticket}/reply', [\App\Http\Controllers\Api\SupportController::class, 'reply'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.support.tickets.reply');
-    });
-});
+    }); // end auth group
+
+    }); // end mobile.feature gate group
+
+}); // end outer mobile group

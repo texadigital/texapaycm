@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'check.limits' => \App\Http\Middleware\CheckUserLimits::class,
             'redirect.admins' => \App\Http\Middleware\RedirectAdminsToFilament::class,
+            'mobile.feature' => \App\Http\Middleware\MobileFeatureGate::class,
+            'force.json' => \App\Http\Middleware\ForceJson::class,
+            'idempotency' => \App\Http\Middleware\EnforceIdempotency::class,
+
         ]);
 
         // Trust ngrok (and other) reverse proxies to honor X-Forwarded-* headers

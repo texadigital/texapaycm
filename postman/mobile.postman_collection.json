@@ -33,6 +33,26 @@
       }
     },
     {
+      "name": "Auth - Register (form)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "name", "value": "Test User" },
+            { "key": "phone", "value": "237650000001" },
+            { "key": "password", "value": "Passw0rd!" },
+            { "key": "pin", "value": "1234" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/auth/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","register"] }
+      }
+    },
+    {
       "name": "Auth - Logout",
       "request": {
         "method": "POST",
@@ -90,7 +110,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -108,7 +129,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -127,16 +149,15 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
             { "key": "quoteId", "value": "{{quoteId}}" },
             { "key": "bankCode", "value": "999240" },
-            { "key": "bankName", "value": "SAFE HAVEN SANDBOX BANK" },
             { "key": "accountNumber", "value": "0119215210" },
-            { "key": "accountName", "value": "TEXA GLOBAL TECHNOLOGIES LTD" },
             { "key": "msisdn", "value": "237653456789" }
           ]
         },
@@ -241,7 +262,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -259,7 +281,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -285,7 +308,8 @@
         "method": "PUT",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": { "mode": "raw", "raw": "{\n  \"email\": { \"transfers\": true, \"promos\": true },\n  \"sms\": { \"alerts\": false },\n  \"push\": { \"alerts\": true }\n}" },
         "url": { "raw": "{{baseUrl}}/api/mobile/profile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","notifications"] }
@@ -297,7 +321,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -331,7 +356,8 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
           "mode": "urlencoded",
@@ -347,6 +373,7 @@
     { "key": "baseUrl", "value": "https://malika-jubilant-seriously.ngrok-free.dev" },
     { "key": "quoteId", "value": "44" },
     { "key": "transferId", "value": "33" },
-    { "key": "ticketId", "value": "1" }
+    { "key": "ticketId", "value": "1" },
+    { "key": "idemKey", "value": "{{$guid}}" }
   ]
 }
