@@ -1,0 +1,168 @@
+{
+  "info": {
+    "name": "TexaPay Mobile API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL."
+  },
+  "item": [
+    {
+      "name": "Feature",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/feature", "host": ["{{baseUrl}}"], "path": ["api","mobile","feature"] }
+      }
+    },
+    {
+      "name": "Auth - Login (form)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "phone", "value": "237650000001" },
+            { "key": "password", "value": "Passw0rd!" },
+            { "key": "pin", "value": "1234" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","login"] }
+      }
+    },
+    {
+      "name": "Auth - Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","logout"] }
+      }
+    },
+    {
+      "name": "Banks - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks"] }
+      }
+    },
+    {
+      "name": "Banks - Favorites",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/banks/favorites", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","favorites"] }
+      }
+    },
+    {
+      "name": "Banks - Suggest",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"accountNumber\": \"0119215210\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/banks/suggest", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","suggest"] }
+      }
+    },
+    {
+      "name": "KYC - Start",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/start", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","start"] }
+      }
+    },
+    {
+      "name": "KYC - Status",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","status"] }
+      }
+    },
+    {
+      "name": "Transfers - Name Enquiry",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "bankCode", "value": "999240" },
+            { "key": "accountNumber", "value": "0119215210" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/name-enquiry", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","name-enquiry"] }
+      }
+    },
+    {
+      "name": "Transfers - Quote",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "amountXaf", "value": "10000" },
+            { "key": "bankCode", "value": "999240" },
+            { "key": "accountNumber", "value": "0119215210" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/quote", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","quote"] }
+      }
+    },
+    {
+      "name": "Transfers - Confirm",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "quoteId", "value": "{{quoteId}}" },
+            { "key": "bankCode", "value": "999240" },
+            { "key": "bankName", "value": "SAFE HAVEN SANDBOX BANK" },
+            { "key": "accountNumber", "value": "0119215210" },
+            { "key": "accountName", "value": "TEXA GLOBAL TECHNOLOGIES LTD" },
+            { "key": "msisdn", "value": "237653456789" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/confirm", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","confirm"] }
+      }
+    },
+    {
+      "name": "Transfers - Timeline",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/timeline", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","timeline"] }
+      }
+    },
+    {
+      "name": "Transfers - Receipt URL",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt-url"] }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "https://malika-jubilant-seriously.ngrok-free.dev" },
+    { "key": "quoteId", "value": "44" },
+    { "key": "transferId", "value": "33" }
+  ]
+}

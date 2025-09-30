@@ -1,0 +1,363 @@
+openapi: 3.0.3
+info:
+  title: TexaPay Mobile API
+  version: 1.0.0
+servers:
+  - url: https://malika-jubilant-seriously.ngrok-free.dev
+    description: Ngrok tunnel
+paths:
+  /api/mobile/feature:
+    get:
+      summary: Feature flag status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+  /api/mobile/auth/login:
+    post:
+      summary: Session login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+  /api/mobile/auth/logout:
+    post:
+      summary: Logout and invalidate session
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
+  /api/mobile/banks:
+    get:
+      summary: List banks
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bank'
+  /api/mobile/banks/favorites:
+    get:
+      summary: List recent/favorite banks
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bank'
+  /api/mobile/banks/suggest:
+    post:
+      summary: Suggest likely bank by account number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountNumber:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /api/mobile/kyc/smileid/start:
+    post:
+      summary: Start Smile ID KYC session
+      responses:
+        '200':
+          description: OK
+  /api/mobile/kyc/smileid/web-token:
+    post:
+      summary: Get Smile ID web token (if library available)
+      responses:
+        '200':
+          description: OK
+  /api/mobile/kyc/status:
+    get:
+      summary: Get current user KYC status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  kyc_status:
+                    type: string
+                    enum: [unverified, pending, verified, failed]
+                  kyc_level:
+                    type: integer
+                  kyc_verified_at:
+                    type: string
+                    format: date-time
+  /api/mobile/transfers/name-enquiry:
+    post:
+      summary: Verify beneficiary account (name enquiry)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameEnquiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/NameEnquiryRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NameEnquiryResponse'
+  /api/mobile/transfers/quote:
+    post:
+      summary: Create a transfer quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+  /api/mobile/transfers/confirm:
+    post:
+      summary: Confirm and initiate pay-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConfirmRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmResponse'
+  /api/mobile/transfers/{transfer}/timeline:
+    get:
+      summary: Get transfer timeline
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+  /api/mobile/transfers/{transfer}/receipt-url:
+    get:
+      summary: Get signed receipt URL
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  url:
+                    type: string
+components:
+  schemas:
+    BasicSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+    LoginRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone:
+          type: string
+        password:
+          type: string
+        pin:
+          type: string
+          description: 4-6 digit PIN if enabled
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            phone:
+              type: string
+            kycStatus:
+              type: string
+            kycLevel:
+              type: integer
+    Bank:
+      type: object
+      properties:
+        bankCode:
+          type: string
+        name:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        categoryId:
+          type: string
+    NameEnquiryRequest:
+      type: object
+      required: [bankCode, accountNumber]
+      properties:
+        bankCode:
+          type: string
+        accountNumber:
+          type: string
+    NameEnquiryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        accountName:
+          type: string
+        bankName:
+          type: string
+          nullable: true
+        reference:
+          type: string
+    QuoteRequest:
+      type: object
+      required: [amountXaf, bankCode, accountNumber]
+      properties:
+        amountXaf:
+          type: integer
+        bankCode:
+          type: string
+        accountNumber:
+          type: string
+        accountName:
+          type: string
+          nullable: true
+    QuoteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        quote:
+          type: object
+          properties:
+            id:
+              type: integer
+            ref:
+              type: string
+            amountXaf:
+              type: integer
+            feeTotalXaf:
+              type: integer
+            totalPayXaf:
+              type: integer
+            receiveNgnMinor:
+              type: integer
+            adjustedRate:
+              type: number
+              format: float
+            expiresAt:
+              type: string
+              format: date-time
+    ConfirmRequest:
+      type: object
+      required: [quoteId, bankCode, accountNumber, msisdn]
+      properties:
+        quoteId:
+          type: integer
+        bankCode:
+          type: string
+        bankName:
+          type: string
+          nullable: true
+        accountNumber:
+          type: string
+        accountName:
+          type: string
+          nullable: true
+        msisdn:
+          type: string
+          description: E.164 Cameroon MoMo without '+'
+    ConfirmResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        transfer:
+          type: object
+          properties:
+            id:
+              type: integer
+            status:
+              type: string
+            payinRef:
+              type: string
