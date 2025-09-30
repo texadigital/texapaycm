@@ -152,6 +152,35 @@
             }
         });
     };
+
+    // Prevent multiple form submissions
+    var form = document.querySelector('form[action="{{ route('transfer.confirm') }}"]');
+    var isSubmitting = false;
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            
+            isSubmitting = true;
+            var submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Processing...';
+            }
+            
+            // Re-enable after 10 seconds as fallback
+            setTimeout(function() {
+                isSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Confirm & Pay';
+                }
+            }, 10000);
+        });
+    }
     
     // Check expiration every 10 seconds
     var expirationCheck = setInterval(checkExpiration, 10000);

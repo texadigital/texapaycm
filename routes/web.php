@@ -49,6 +49,7 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
 
 // Auth + Dashboard
 Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
+Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register'])->name('register');
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
 // PIN challenge for users with PIN enabled

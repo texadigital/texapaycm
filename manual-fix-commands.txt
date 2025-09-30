@@ -1,0 +1,54 @@
+# TexaPay Production Fix Commands
+# Run these commands on your server: ssh root@195.35.1.5
+
+# 1. Navigate to your project directory
+cd /var/www/html/texapay
+# OR
+cd /var/www/texapay
+# OR
+cd /home/texapay/public_html
+
+# 2. Backup current .env file
+cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+
+# 3. Fix the session driver (change Redis to database)
+sed -i 's/SESSION_DRIVER=redis/SESSION_DRIVER=database/' .env
+
+# 4. Verify the change
+grep "SESSION_DRIVER" .env
+
+# 5. Clear all caches
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+
+# 6. Optimize for production
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# 7. Ensure sessions table exists
+php artisan migrate:status | grep sessions
+# If sessions table doesn't exist, run:
+php artisan session:table
+php artisan migrate
+
+# 8. Set proper permissions
+chmod -R 755 storage/
+chmod -R 755 bootstrap/cache/
+chmod -R 755 public/
+
+# 9. Restart web server
+# For Apache:
+sudo systemctl restart apache2
+
+# For Nginx:
+sudo systemctl restart nginx
+
+# 10. Test the site
+curl -I https://pay.texa.ng/
+
+# 11. Check logs if issues persist
+tail -f storage/logs/laravel.log
+
