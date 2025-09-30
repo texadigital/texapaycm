@@ -62,6 +62,12 @@
                                 <li><a class="dropdown-item" href="{{ route('policies') }}">Policies & Terms</a></li>
                             </ul>
                         </li>
+                        @php($kycEnabled = class_exists('\\App\\Models\\AdminSetting') ? (bool) \App\Models\AdminSetting::getValue('kyc_enabled', false) : false)
+                        @if($kycEnabled && (auth()->user()->kyc_status ?? 'unverified') !== 'verified')
+                        <li class="nav-item">
+                            <a class="nav-link text-danger" href="{{ route('kyc.index') }}">Verify Identity (KYC)</a>
+                        </li>
+                        @endif
                     </ul>
                     <div class="d-flex">
                         <form method="POST" action="{{ route('logout') }}">
@@ -90,15 +96,15 @@
         var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
         s1.async=true;
         s1.src='https://embed.tawk.to/{{ \App\Models\AdminSetting::getValue('tawk_to_widget_id') }}';
-        s1.charset='UTF-8';
         s1.setAttribute('crossorigin','*');
         s0.parentNode.insertBefore(s1,s0);
         })();
         </script>
     @endif
-
     @if(!$usingVite)
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     @endif
+    <script src="https://cdn.smileidentity.com/inline/v2/js/script.min.js"></script>
+    @stack('scripts')
 </body>
 </html>

@@ -36,6 +36,13 @@ class User extends Authenticatable implements FilamentUser
         // Notification prefs (if present)
         'email_notifications',
         'sms_notifications',
+        // KYC fields
+        'kyc_level',
+        'kyc_status',
+        'kyc_provider_ref',
+        'kyc_verified_at',
+        'kyc_meta',
+        'kyc_attempts',
     ];
 
     /**
@@ -64,6 +71,10 @@ class User extends Authenticatable implements FilamentUser
             'is_admin' => 'boolean',
             'email_notifications' => 'boolean',
             'sms_notifications' => 'boolean',
+            'kyc_level' => 'integer',
+            'kyc_status' => 'string',
+            'kyc_verified_at' => 'datetime',
+            'kyc_meta' => 'array',
         ];
     }
 

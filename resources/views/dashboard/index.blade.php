@@ -25,6 +25,22 @@
       @endforeach
     @endif
 
+    @php
+      $kycEnabled = class_exists(\App\Models\AdminSetting::class)
+        ? (bool) \App\Models\AdminSetting::getValue('kyc_enabled', false)
+        : false;
+    @endphp
+    @if($kycEnabled && (auth()->user()->kyc_status ?? 'unverified') !== 'verified')
+      <div style="background:#e0e7ff;color:#1e3a8a;padding:12px;border-radius:8px;margin-bottom:16px;border:1px solid #c7d2fe;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div>
+          <strong>Verify your identity</strong> to unlock higher sending limits. It only takes 1–2 minutes.
+        </div>
+        <div>
+          <a class="btn" href="{{ route('kyc.index') }}" style="background:#1e3a8a">Start KYC</a>
+        </div>
+      </div>
+    @endif
+
     <!-- Transaction Limits Overview -->
     @if(isset($limitStatus['limits']))
     <div style="background:#ffffff;border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid #e5e7eb;">

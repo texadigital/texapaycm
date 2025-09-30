@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Kyc\SmileIdController;
+use App\Http\Controllers\Kyc\KycController;
 
 Route::get('/', function () {
     // If an admin lands on root, send them to Filament admin
@@ -89,6 +91,11 @@ Route::middleware(['auth','redirect.admins'])->group(function () {
 Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
+
+// KYC: Smile ID webhook (public)
+Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('kyc.smileid.callback');
 
 // Refund webhook (PawaPay sends refund status callbacks here)
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
@@ -185,5 +192,15 @@ Route::get('/health/oxr', function () {
 Route::get('/s/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showSharedReceipt'])
     ->middleware('signed')
     ->name('transfer.receipt.shared');
+
+// KYC: Smile ID start-session (authenticated)
+Route::middleware(['auth'])->group(function () {
+    Route::post('/api/kyc/smileid/start', [SmileIdController::class, 'start'])
+        ->name('kyc.smileid.start');
+    Route::post('/api/kyc/smileid/web-token', [SmileIdController::class, 'webToken'])
+        ->name('kyc.smileid.web_token');
+    Route::get('/kyc', [KycController::class, 'index'])->name('kyc.index');
+    Route::get('/api/kyc/status', [KycController::class, 'status'])->name('kyc.status');
+});
 
 

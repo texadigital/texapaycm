@@ -18,7 +18,72 @@ class LimitCheckService
     public function canUserTransact(User $user, int $amount): array
     {
         try {
-            return $user->canMakeTransaction($amount);
+            // Feature flag for KYC-based gating
+            $kycEnabled = (bool) \App\Models\AdminSetting::getValue('kyc_enabled', false);
+
+            if (!$kycEnabled) {
+                // Legacy behavior
+                return $user->canMakeTransaction($amount);
+            }
+
+            // Read KYC caps by level from AdminSetting with sane defaults
+            $level = (int) ($user->kyc_level ?? 0);
+            $caps = $this->getKycCapsForLevel($level);
+
+            // Pull existing per-user limits to combine (min of both systems)
+            $limits = $user->getOrCreateLimits();
+            $dailyUsage = DailyTransactionSummary::getDailyUsage($user->id);
+            $monthlyUsage = DailyTransactionSummary::getMonthlyUsage($user->id);
+
+            // Effective caps (amount only, counts still from per-user limits)
+            $effectiveDailyCap = min((int) $limits->daily_limit_xaf, (int) $caps['daily_cap_xaf']);
+            $effectiveMonthlyCap = min((int) $limits->monthly_limit_xaf, (int) $caps['monthly_cap_xaf']);
+
+            // Per-transaction cap check first
+            if ($amount > (int) $caps['per_tx_cap_xaf']) {
+                return [
+                    'can_transact' => false,
+                    'reason' => $level === 0 ? 'KYC required to send this amount.' : 'Per-transaction cap exceeded.',
+                    'limit_type' => 'kyc_per_tx',
+                    'limit' => (int) $caps['per_tx_cap_xaf'],
+                ];
+            }
+
+            // Daily amount cap
+            if (($dailyUsage['amount'] + $amount) > $effectiveDailyCap) {
+                return [
+                    'can_transact' => false,
+                    'reason' => $level === 0 ? 'KYC required: daily cap exceeded.' : 'Daily cap exceeded.',
+                    'limit_type' => 'kyc_daily_amount',
+                    'current_usage' => $dailyUsage['amount'],
+                    'limit' => $effectiveDailyCap,
+                    'remaining' => max(0, $effectiveDailyCap - $dailyUsage['amount'])
+                ];
+            }
+
+            // Monthly amount cap
+            if (($monthlyUsage['total_amount'] + $amount) > $effectiveMonthlyCap) {
+                return [
+                    'can_transact' => false,
+                    'reason' => $level === 0 ? 'KYC required: monthly cap exceeded.' : 'Monthly cap exceeded.',
+                    'limit_type' => 'kyc_monthly_amount',
+                    'current_usage' => $monthlyUsage['total_amount'],
+                    'limit' => $effectiveMonthlyCap,
+                    'remaining' => max(0, $effectiveMonthlyCap - $monthlyUsage['total_amount'])
+                ];
+            }
+
+            // Fall back to existing count-based checks via legacy method for simplicity
+            $legacy = $user->canMakeTransaction($amount);
+            if (!$legacy['can_transact']) {
+                return $legacy;
+            }
+
+            return [
+                'can_transact' => true,
+                'daily_remaining' => max(0, $effectiveDailyCap - $dailyUsage['amount']),
+                'monthly_remaining' => max(0, $effectiveMonthlyCap - $monthlyUsage['total_amount']),
+            ];
         } catch (\Exception $e) {
             Log::error('Error checking user transaction limits', [
                 'user_id' => $user->id,
@@ -32,6 +97,23 @@ class LimitCheckService
                 'limit_type' => 'system_error'
             ];
         }
+    }
+
+    /**
+     * Get admin-configured caps by KYC level with defaults in XAF.
+     */
+    protected function getKycCapsForLevel(int $level): array
+    {
+        $prefix = $level === 1 ? 'kyc.level1.' : 'kyc.level0.';
+        $defaults = $level === 1
+            ? ['per_tx_cap_xaf' => 2000000, 'daily_cap_xaf' => 5000000, 'monthly_cap_xaf' => 50000000]
+            : ['per_tx_cap_xaf' => 50000, 'daily_cap_xaf' => 150000, 'monthly_cap_xaf' => 1000000];
+
+        return [
+            'per_tx_cap_xaf' => (int) \App\Models\AdminSetting::getValue($prefix . 'per_tx_cap_xaf', $defaults['per_tx_cap_xaf']),
+            'daily_cap_xaf' => (int) \App\Models\AdminSetting::getValue($prefix . 'daily_cap_xaf', $defaults['daily_cap_xaf']),
+            'monthly_cap_xaf' => (int) \App\Models\AdminSetting::getValue($prefix . 'monthly_cap_xaf', $defaults['monthly_cap_xaf']),
+        ];
     }
 
     /**

@@ -66,14 +66,24 @@ class CheckUserLimits
                     return response()->json([
                         'success' => false,
                         'message' => $limitCheck['reason'],
-                        'limit_info' => $limitCheck
+                        'limit_info' => $limitCheck,
+                        'kyc_required' => str_starts_with((string)($limitCheck['limit_type'] ?? ''), 'kyc_'),
+                        'kyc_url' => str_starts_with((string)($limitCheck['limit_type'] ?? ''), 'kyc_') ? route('kyc.index') : null,
                     ], 400);
                 }
 
-                return redirect()->back()
+                $redir = redirect()->back()
                     ->withInput()
                     ->with('error', $limitCheck['reason'])
                     ->with('limit_info', $limitCheck);
+
+                // If KYC gating is the reason, add helpful flags for the UI
+                if (str_starts_with((string)($limitCheck['limit_type'] ?? ''), 'kyc_')) {
+                    $redir->with('kyc_required', true)
+                          ->with('kyc_url', route('kyc.index'));
+                }
+
+                return $redir;
             }
 
             // Add limit warnings to the request for display
