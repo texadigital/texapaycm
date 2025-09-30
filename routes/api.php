@@ -36,6 +36,9 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
 
     // Authenticated routes
     Route::middleware(['auth'])->group(function () {
+        // Dashboard
+        Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'summary'])->name('api.mobile.dashboard');
+
         // KYC (reuse existing Smile ID controller)
         Route::post('/kyc/smileid/start', [\App\Http\Controllers\Kyc\SmileIdController::class, 'start'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
@@ -46,6 +49,8 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
         Route::get('/kyc/status', [\App\Http\Controllers\Kyc\KycController::class, 'status'])->name('api.mobile.kyc.status');
 
         // Transfers JSON orchestration
+        Route::get('/transfers', [\App\Http\Controllers\Api\TransfersController::class, 'index'])->name('api.mobile.transfers.index');
+        Route::get('/transfers/{transfer}', [\App\Http\Controllers\Api\TransfersController::class, 'show'])->name('api.mobile.transfers.show');
         Route::post('/transfers/name-enquiry', [\App\Http\Controllers\Api\TransfersController::class, 'nameEnquiry'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->middleware(['throttle:20,1'])
@@ -61,5 +66,18 @@ Route::middleware(['web','throttle:api'])->prefix('mobile')->group(function () {
 
         Route::get('/transfers/{transfer}/timeline', [\App\Http\Controllers\Api\TransfersController::class, 'timeline'])->name('api.mobile.transfers.timeline');
         Route::get('/transfers/{transfer}/receipt-url', [\App\Http\Controllers\Api\TransfersController::class, 'receiptUrl'])->name('api.mobile.transfers.receipt_url');
+
+        // Pricing & Limits
+        Route::get('/pricing/limits', [\App\Http\Controllers\Api\PricingController::class, 'limits'])->name('api.mobile.pricing.limits');
+        Route::get('/pricing/rate-preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])->name('api.mobile.pricing.preview');
+
+        // Profile
+        Route::get('/profile', [\App\Http\Controllers\Api\ProfileController::class, 'show'])->name('api.mobile.profile.show');
+
+        // Policies
+        Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
+
+        // Support (read-only help)
+        Route::get('/support/help', [\App\Http\Controllers\Api\SupportController::class, 'help'])->name('api.mobile.support.help');
     });
 });

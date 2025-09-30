@@ -21,6 +21,73 @@ use Carbon\Carbon;
 class TransfersController extends Controller
 {
     /**
+     * GET /api/mobile/transfers
+     * Query: status?, from?, to?, page?, perPage?
+     */
+    public function index(Request $request)
+    {
+        $userId = Auth::id();
+        $q = Transfer::query()->where('user_id', $userId)
+            ->orderByDesc('id');
+
+        if ($s = $request->query('status')) {
+            $q->where('status', $s);
+        }
+        if ($from = $request->query('from')) {
+            $q->where('created_at', '>=', Carbon::parse($from));
+        }
+        if ($to = $request->query('to')) {
+            $q->where('created_at', '<=', Carbon::parse($to));
+        }
+
+        $per = min(max((int) $request->query('perPage', 15), 1), 100);
+        $p = $q->paginate($per);
+
+        $data = array_map(function ($t) {
+            return [
+                'id' => $t->id,
+                'status' => $t->status,
+                'amountXaf' => (int) $t->amount_xaf,
+                'totalPayXaf' => (int) $t->total_pay_xaf,
+                'receiveNgnMinor' => (int) $t->receive_ngn_minor,
+                'bankCode' => $t->recipient_bank_code,
+                'accountNumber' => $t->recipient_account_number,
+                'accountName' => $t->recipient_account_name,
+                'createdAt' => $t->created_at?->toISOString(),
+            ];
+        }, $p->items());
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'page' => $p->currentPage(),
+                'perPage' => $p->perPage(),
+                'total' => $p->total(),
+                'lastPage' => $p->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/mobile/transfers/{transfer}
+     */
+    public function show(Request $request, Transfer $transfer)
+    {
+        $this->authorizeOwner($transfer);
+        return response()->json([
+            'id' => $transfer->id,
+            'status' => $transfer->status,
+            'amountXaf' => (int) $transfer->amount_xaf,
+            'totalPayXaf' => (int) $transfer->total_pay_xaf,
+            'receiveNgnMinor' => (int) $transfer->receive_ngn_minor,
+            'bankCode' => $transfer->recipient_bank_code,
+            'bankName' => $transfer->recipient_bank_name,
+            'accountNumber' => $transfer->recipient_account_number,
+            'accountName' => $transfer->recipient_account_name,
+            'createdAt' => $transfer->created_at?->toISOString(),
+        ]);
+    }
+    /**
      * Simple idempotency wrapper using cache for mobile endpoints only.
      */
     protected function idempotent(Request $request, \Closure $fn)

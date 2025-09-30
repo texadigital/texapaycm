@@ -158,6 +158,74 @@
         "header": [{ "key": "Accept", "value": "application/json" }],
         "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt-url"] }
       }
+    },
+    {
+      "name": "Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/dashboard", "host": ["{{baseUrl}}"], "path": ["api","mobile","dashboard"] }
+      }
+    },
+    {
+      "name": "Transfers - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers?page=1&perPage=10", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers"], "query": [
+          {"key":"page","value":"1"}, {"key":"perPage","value":"10"}
+        ] }
+      }
+    },
+    {
+      "name": "Transfers - Show",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}"] }
+      }
+    },
+    {
+      "name": "Pricing - Limits",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/pricing/limits", "host": ["{{baseUrl}}"], "path": ["api","mobile","pricing","limits"] }
+      }
+    },
+    {
+      "name": "Pricing - Preview",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/pricing/rate-preview?amountXaf=10000", "host": ["{{baseUrl}}"], "path": ["api","mobile","pricing","rate-preview"], "query": [
+          {"key":"amountXaf","value":"10000"}
+        ] }
+      }
+    },
+    {
+      "name": "Profile - Show",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/profile", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile"] }
+      }
+    },
+    {
+      "name": "Policies",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/policies", "host": ["{{baseUrl}}"], "path": ["api","mobile","policies"] }
+      }
+    },
+    {
+      "name": "Support - Help",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/support/help", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","help"] }
+      }
     }
   ],
   "variable": [

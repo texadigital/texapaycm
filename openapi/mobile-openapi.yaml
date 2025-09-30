@@ -220,8 +220,229 @@ paths:
                     type: boolean
                   url:
                     type: string
+  /api/mobile/dashboard:
+    get:
+      summary: Dashboard summary for the signed-in user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+  /api/mobile/transfers:
+    get:
+      summary: List transfers for the signed-in user
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: perPage
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransfersIndex'
+  /api/mobile/transfers/{transfer}:
+    get:
+      summary: Get a single transfer
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferSummary'
+  /api/mobile/pricing/limits:
+    get:
+      summary: Get effective limits and usage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitsResponse'
+  /api/mobile/pricing/rate-preview:
+    get:
+      summary: Price preview without persisting a quote
+      parameters:
+        - in: query
+          name: amountXaf
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingPreview'
+  /api/mobile/profile:
+    get:
+      summary: Get basic profile and KYC summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+  /api/mobile/policies:
+    get:
+      summary: Get policy links and versions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoliciesResponse'
+  /api/mobile/support/help:
+    get:
+      summary: Help topics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HelpTopics'
 components:
   schemas:
+    DashboardSummary:
+      type: object
+      properties:
+        kyc:
+          type: object
+          properties:
+            status: { type: string }
+            level: { type: integer }
+        today:
+          type: object
+          properties:
+            count: { type: integer }
+            totalXaf: { type: integer }
+        month:
+          type: object
+          properties:
+            count: { type: integer }
+            totalXaf: { type: integer }
+        recentTransfers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              status: { type: string }
+              amountXaf: { type: integer }
+              createdAt: { type: string, format: date-time }
+    TransferSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        amountXaf: { type: integer }
+        totalPayXaf: { type: integer }
+        receiveNgnMinor: { type: integer }
+        bankCode: { type: string }
+        bankName: { type: string, nullable: true }
+        accountNumber: { type: string }
+        accountName: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    TransfersIndex:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferSummary'
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            perPage: { type: integer }
+            total: { type: integer }
+            lastPage: { type: integer }
+    LimitsResponse:
+      type: object
+      properties:
+        minXaf: { type: integer }
+        maxXaf: { type: integer }
+        dailyCap: { type: integer, nullable: true }
+        monthlyCap: { type: integer, nullable: true }
+        usedToday: { type: integer, nullable: true }
+        usedMonth: { type: integer, nullable: true }
+        remainingXafDay: { type: integer, nullable: true }
+        remainingXafMonth: { type: integer, nullable: true }
+    PricingPreview:
+      type: object
+      properties:
+        amountXaf: { type: integer }
+        feeTotalXaf: { type: integer }
+        totalPayXaf: { type: integer }
+        receiveNgnMinor: { type: integer }
+        adjustedRate: { type: number }
+    ProfileResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string, nullable: true }
+        kyc:
+          type: object
+          properties:
+            status: { type: string }
+            level: { type: integer }
+            verifiedAt: { type: string, format: date-time, nullable: true }
+    PoliciesResponse:
+      type: object
+      properties:
+        terms:
+          type: object
+          properties:
+            url: { type: string }
+            version: { type: string }
+        privacy:
+          type: object
+          properties:
+            url: { type: string }
+            version: { type: string }
+        fees:
+          type: object
+          properties:
+            url: { type: string }
+            version: { type: string }
+    HelpTopics:
+      type: object
+      properties:
+        topics:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              url: { type: string }
     BasicSuccess:
       type: object
       properties:
