@@ -12,6 +12,16 @@ class PawaPay
     protected ?array $lastAuthError = null;
     protected string $apiVersion;
     protected ?string $caBundle = null;
+    /** @var array<string,string> */
+    protected array $failureMessages = [
+        'PAYER_LIMIT_REACHED' => 'Payer reached provider limit. Try a lower amount or later.',
+        'PAYER_NOT_FOUND' => 'Mobile wallet not found. Please check the MSISDN.',
+        'PAYMENT_NOT_APPROVED' => 'Payment was not approved by the provider.',
+        'INSUFFICIENT_BALANCE' => 'Insufficient wallet balance.',
+        'UNSPECIFIED_FAILURE' => 'Payment failed due to an unspecified error.',
+        'EXPIRED' => 'Payment request expired.',
+        'CANCELLED' => 'Payment request was cancelled.',
+    ];
 
     public function __construct()
     {
@@ -33,6 +43,29 @@ class PawaPay
                 $this->caBundle = $resolved;
             }
         }
+    }
+
+    /**
+     * Normalize PawaPay statuses to internal statuses.
+     */
+    protected function normalizeStatus(string $statusRaw, int $http = 0, bool $ok = false): string
+    {
+        $statusRaw = strtoupper(trim($statusRaw));
+        if (in_array($statusRaw, ['COMPLETED'], true)) { return 'success'; }
+        if (in_array($statusRaw, ['FAILED','REJECTED','CANCELLED','EXPIRED'], true)) { return 'failed'; }
+        if (in_array($statusRaw, ['ACCEPTED','SUBMITTED','PENDING','DUPLICATE_IGNORED'], true)) { return 'pending'; }
+        // Fallback from HTTP
+        if ($ok || in_array($http, [200,201,202], true)) { return 'pending'; }
+        return 'failed';
+    }
+
+    /**
+     * Map failureCode to friendly message.
+     */
+    protected function failureMessage(string $code): string
+    {
+        $code = strtoupper(trim($code));
+        return $this->failureMessages[$code] ?? ('Payment failed: ' . ($code ?: 'UNKNOWN'));
     }
 
     protected function client(string $mode = 'both')
@@ -156,12 +189,20 @@ class PawaPay
             $depositId = $payload['reference'] ?? (string) Str::uuid();
             $provider = $payload['provider'] ?? null; // e.g., MTN_MOMO_CMR
             $msisdn = $payload['msisdn'] ?? null;
-            $amountDecimal = number_format(($payload['amount_xaf_minor'] ?? 0) / 1, 0, '.', '');
+            // Our app computes XAF amount in minor units (×100). PawaPay expects currency units for XAF.
+            // Convert minor->units by dividing by 100 and sending an integer string.
+            $minor = (int) ($payload['amount_xaf_minor'] ?? 0);
+            $amountUnits = (int) floor($minor / 100);
+            if ($amountUnits <= 0 && $minor > 0) {
+                // Guard for very small non-zero values due to rounding; ensure at least 1 unit if minor>0
+                $amountUnits = (int) ceil($minor / 100);
+            }
+            $amountString = (string) $amountUnits;
 
             // Docs show deposits payload
             $body = [
                 'depositId' => $depositId,
-                'amount' => (string) $amountDecimal,
+                'amount' => $amountString,
                 'currency' => $payload['currency'] ?? 'XAF',
                 'payer' => [
                     'type' => 'MMO',
@@ -185,13 +226,10 @@ class PawaPay
             $resp = $this->client()->post($this->path('/deposits'), $body);
 
             $json = $resp->json();
-            $statusRaw = $json['status'] ?? null; // ACCEPTED/REJECTED
+            $statusRaw = strtoupper((string)($json['status'] ?? '')); // ACCEPTED/REJECTED/SUBMITTED
             $http = $resp->status();
             $ok = $resp->successful();
-            $status = 'failed';
-            if (($ok && in_array($statusRaw, ['ACCEPTED', 'DUPLICATE_IGNORED'], true)) || in_array($http, [200, 201, 202], true)) {
-                $status = 'pending';
-            }
+            $status = $this->normalizeStatus($statusRaw, $http, $ok);
             $raw = $json ?? [];
             if (!$json) {
                 $raw = ['body' => $resp->body()];
@@ -202,6 +240,9 @@ class PawaPay
             }
             if (!isset($raw['message']) && isset($raw['errors']) && is_array($raw['errors'])) {
                 $raw['message'] = implode('; ', array_map(function($e){ return is_array($e) ? ($e['message'] ?? json_encode($e)) : (string)$e; }, $raw['errors']));
+            }
+            if (isset($raw['failureCode']) && !isset($raw['message'])) {
+                $raw['message'] = $this->failureMessage((string) $raw['failureCode']);
             }
             return [
                 'ref' => $json['depositId'] ?? $depositId,
@@ -234,12 +275,10 @@ class PawaPay
             // Docs mention checking deposit status
             $resp = $this->client()->get($this->path('/deposits/' . urlencode($reference)));
             $json = $resp->json();
-            $statusRaw = $json['status'] ?? null; // COMPLETED/REJECTED/PENDING
-            $status = 'pending';
-            if ($statusRaw === 'COMPLETED') {
-                $status = 'success';
-            } elseif ($statusRaw === 'REJECTED') {
-                $status = 'failed';
+            $statusRaw = strtoupper((string)($json['status'] ?? ''));
+            $status = $this->normalizeStatus($statusRaw, $resp->status(), $resp->successful());
+            if (isset($json['failureCode']) && !isset($json['message'])) {
+                $json['message'] = $this->failureMessage((string) $json['failureCode']);
             }
             return [
                 'status' => $status,

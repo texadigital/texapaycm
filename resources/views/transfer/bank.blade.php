@@ -1,12 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transfer to Bank (Nigeria) - TexaPay</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('layouts.app')
+
+@section('content')
     <style>
         * {
             margin: 0;
@@ -263,8 +257,6 @@
             }
         }
     </style>
-</head>
-<body>
     <div class="container">
         <a href="{{ route('dashboard') }}" class="back-link">
             ← Back to Dashboard
@@ -507,5 +499,4 @@
             }
         });
     </script>
-</body>
-</html>
+@endsection

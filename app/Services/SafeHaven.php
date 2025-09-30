@@ -158,6 +158,7 @@ class SafeHaven
                 return null;
             }
             $json = $resp->json();
+            $httpStatus = $resp->status();
             $this->accessToken = $json['access_token'] ?? null;
             // Some responses may include ibs_client_id; set header for subsequent calls
             if (isset($json['ibs_client_id']) && !$this->ibsClientId) {
@@ -430,11 +431,11 @@ class SafeHaven
             ]);
 
             $json = $resp->json();
+            $httpStatus = $resp->status();
             $statusCode = $json['statusCode'] ?? $json['status'] ?? null;
             $respCode = $json['responseCode'] ?? ($json['data']['responseCode'] ?? null);
-            $ok = $resp->ok() && (
-                $statusCode === 200 || $respCode === '00' || ($json['success'] ?? false)
-            );
+            // Consider body codes authoritative; some tenants return 200 in body with non-2xx HTTP
+            $ok = ($statusCode === 200 || $respCode === '00' || ($json['success'] ?? false));
 
             // Map known error codes to friendly messages
             if (!$ok && ($json['responseCode'] ?? null) === '63') {
@@ -446,7 +447,7 @@ class SafeHaven
                 'account_name' => $json['data']['accountName'] ?? ($json['accountName'] ?? null),
                 'bank_name' => $json['data']['bankName'] ?? ($json['bankName'] ?? null),
                 'reference' => $json['data']['sessionId'] ?? ($json['sessionId'] ?? null),
-                'raw' => $json,
+                'raw' => array_merge($json ?? [], ['http_status' => $httpStatus]),
             ];
         } catch (\Throwable $e) {
             return [
@@ -476,18 +477,26 @@ class SafeHaven
 
         try {
             // Real endpoint per docs: POST /transfers (requires nameEnquiryReference)
-            $resp = $this->client()->post($this->baseUrl . '/transfers', [
+            $minor = (int) ($payload['amount_ngn_minor'] ?? 0);
+            // If no kobo, send integer NGN (e.g., 5000). Otherwise send float with 2 decimals (e.g., 4040.73)
+            $amountValue = ($minor % 100 === 0)
+                ? (int) ($minor / 100)
+                : round($minor / 100, 2);
+            $body = [
                 'nameEnquiryReference' => $payload['name_enquiry_reference'] ?? null,
                 'debitAccountNumber' => $payload['debit_account_number'] ?? null,
                 'beneficiaryBankCode' => $payload['bank_code'] ?? null,
                 'beneficiaryAccountNumber' => $payload['account_number'] ?? null,
-                'amount' => ($payload['amount_ngn_minor'] ?? 0) / 100,
+                'amount' => $amountValue,
                 'saveBeneficiary' => false,
                 'narration' => $payload['narration'] ?? null,
                 'paymentReference' => $payload['reference'] ?? null,
-            ]);
+            ];
+            // Do not include non-documented fields like beneficiaryName to avoid 400s
+            $resp = $this->client()->post($this->baseUrl . '/transfers', $body);
 
             $json = $resp->json();
+            $httpStatus = $resp->status();
             $httpOk = $resp->ok();
             $respCode = $json['responseCode'] ?? ($json['data']['responseCode'] ?? null);
             $dataStatus = strtolower((string)($json['data']['status'] ?? ''));
@@ -504,7 +513,7 @@ class SafeHaven
             return [
                 'ref' => $session,
                 'status' => $status,
-                'raw' => $json,
+                'raw' => array_merge($json ?? [], ['http_status' => $httpStatus, 'request' => $body]),
             ];
         } catch (\Throwable $e) {
             return [

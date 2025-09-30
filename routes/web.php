@@ -1,51 +1,111 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Kyc\SmileIdController;
+use App\Http\Controllers\Kyc\KycController;
 
 Route::get('/', function () {
+    // If an admin lands on root, send them to Filament admin
+    if (Auth::check() && (bool) (Auth::user()->is_admin ?? false)) {
+        return redirect('/admin');
+    }
     return redirect()->route('transfer.bank');
 });
 
-Route::middleware('auth')->prefix('transfer')->group(function () {
+// Admin-friendly receipt route (avoid redirect.admins so admins can view receipts)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/admin/transfer/{transfer}/receipt', [\App\Http\Controllers\TransferController::class, 'showReceipt'])
+        ->name('admin.transfer.receipt');
+});
+
+Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(function () {
     Route::get('/bank', [\App\Http\Controllers\TransferController::class, 'showBankForm'])->name('transfer.bank');
     Route::post('/bank/verify', [\App\Http\Controllers\TransferController::class, 'verifyBank'])->name('transfer.bank.verify');
 
     Route::get('/quote', [\App\Http\Controllers\TransferController::class, 'showQuoteForm'])->name('transfer.quote');
-    Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])->name('transfer.quote.create');
-
-    Route::post('/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
+    Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
+        ->middleware('check.limits')
+        ->name('transfer.quote.create');
+    Route::post('/quote/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
 
     Route::get('/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transfer.receipt');
+    Route::post('/{transfer}/payin/status', [\App\Http\Controllers\TransferController::class, 'payinStatus'])->name('transfer.payin.status');
     Route::post('/{transfer}/payout', [\App\Http\Controllers\TransferController::class, 'initiatePayout'])->name('transfer.payout');
     Route::post('/{transfer}/payout/status', [\App\Http\Controllers\TransferController::class, 'payoutStatus'])->name('transfer.payout.status');
+
+    // Live timeline JSON for client polling
+    Route::get('/{transfer}/timeline', [\App\Http\Controllers\TransferController::class, 'timeline'])
+        ->name('transfer.timeline');
+    // Download single receipt as PDF
+    Route::get('/{transfer}/receipt/pdf', [\App\Http\Controllers\TransferController::class, 'receiptPdf'])
+        ->name('transfer.receipt.pdf');
+    // Generate a temporary signed share link (JSON)
+    Route::post('/{transfer}/share-url', [\App\Http\Controllers\TransferController::class, 'shareLink'])
+        ->name('transfer.receipt.share.link');
 });
+
+ 
 
 // Auth + Dashboard
 Route::get('/register', [\App\Http\Controllers\AuthController::class, 'showRegister'])->name('register.show');
-Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register'])->name('register');
 Route::get('/login', [\App\Http\Controllers\AuthController::class, 'showLogin'])->name('login.show');
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->name('login');
+// PIN challenge for users with PIN enabled
+Route::get('/login/pin', [\App\Http\Controllers\AuthController::class, 'showPinChallenge'])->name('login.pin.show');
+Route::post('/login/pin', [\App\Http\Controllers\AuthController::class, 'verifyPinChallenge'])->name('login.pin.verify');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
-    Route::post('/account/delete', [\App\Http\Controllers\AuthController::class, 'deleteAccount'])->name('account.delete');
-
-    // Transactions
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
-    Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'exportPdf'])->name('transactions.export');
-    Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransactionsController::class, 'show'])
-        ->name('transactions.show');
+    Route::get('/transactions/{transfer}', [\App\Http\Controllers\TransferController::class, 'showReceipt'])->name('transactions.show');
+    Route::get('/transactions/export', [\App\Http\Controllers\TransactionsController::class, 'export'])->name('transactions.export');
+    
+    // Profile routes
+    Route::prefix('profile')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProfileController::class, 'index'])->name('profile.index');
+        Route::get('/limits', [\App\Http\Controllers\ProfileController::class, 'limits'])->name('profile.limits');
+        Route::get('/personal-info', [\App\Http\Controllers\ProfileController::class, 'personalInfo'])->name('profile.personal');
+        Route::post('/personal-info', [\App\Http\Controllers\ProfileController::class, 'updatePersonalInfo'])->name('profile.personal.update');
+        Route::get('/notifications', [\App\Http\Controllers\ProfileController::class, 'notifications'])->name('profile.notifications');
+        Route::post('/notifications', [\App\Http\Controllers\ProfileController::class, 'updateNotifications'])->name('profile.notifications.update');
+        // Security
+        Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'index'])->name('profile.security');
+        Route::post('/security/toggles', [\App\Http\Controllers\SecurityController::class, 'updateToggles'])->name('profile.security.toggles');
+        Route::post('/security/pin', [\App\Http\Controllers\SecurityController::class, 'updatePin'])->name('profile.security.pin');
+    });
+    
+    // Account management
+    Route::post('/account/delete', [\App\Http\Controllers\ProfileController::class, 'deleteAccount'])->name('account.delete');
+
+    // Support routes
+    Route::prefix('support')->group(function () {
+        Route::get('/help', [\App\Http\Controllers\SupportController::class, 'help'])->name('support.help');
+        Route::get('/contact', [\App\Http\Controllers\SupportController::class, 'contact'])->name('support.contact');
+        Route::post('/contact', [\App\Http\Controllers\SupportController::class, 'submitTicket'])->name('support.contact.submit');
+        Route::get('/tickets', [\App\Http\Controllers\SupportController::class, 'myTickets'])->name('support.tickets');
+    });
 });
 
 // Webhooks
-Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
+Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
+
+// KYC: Smile ID webhook (public)
+Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('kyc.smileid.callback');
 
 // Refund webhook (PawaPay sends refund status callbacks here)
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.refunds');
+
+// Public static pages
+Route::get('/policies', function () {
+    return view('static.policies');
+})->name('policies');
 
 // PawaPay dashboard may call versioned paths; add aliases to avoid 404s
 Route::post('/api/v1/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
@@ -127,4 +187,20 @@ Route::get('/health/oxr', function () {
     
     return response()->json($debug);
 });
+
+// Signed, shareable receipt view (public, signed URL required)
+Route::get('/s/receipt/{transfer}', [\App\Http\Controllers\TransferController::class, 'showSharedReceipt'])
+    ->middleware('signed')
+    ->name('transfer.receipt.shared');
+
+// KYC: Smile ID start-session (authenticated)
+Route::middleware(['auth'])->group(function () {
+    Route::post('/api/kyc/smileid/start', [SmileIdController::class, 'start'])
+        ->name('kyc.smileid.start');
+    Route::post('/api/kyc/smileid/web-token', [SmileIdController::class, 'webToken'])
+        ->name('kyc.smileid.web_token');
+    Route::get('/kyc', [KycController::class, 'index'])->name('kyc.index');
+    Route::get('/api/kyc/status', [KycController::class, 'status'])->name('kyc.status');
+});
+
 

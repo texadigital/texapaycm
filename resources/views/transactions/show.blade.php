@@ -1,39 +1,30 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Transaction #{{ $t->id }} • TexaPay</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('content')
   <style>
-    body{font-family:Inter,system-ui,Arial,sans-serif;background:#0b1220;color:#e6e8ec;margin:0}
-    header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#0f172a;border-bottom:1px solid #1f2a44}
     .container{max-width:900px;margin:0 auto;padding:20px}
     .btn{display:inline-block;background:#2563eb;border:none;color:#fff;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;text-decoration:none}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .card{background:#0f172a;border:1px solid #1f2a44;border-radius:12px;padding:16px}
-    .label{color:#9aa4b2;font-size:12px}
+    .card{background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:16px}
+    .label{color:#6b7280;font-size:12px}
     .value{font-weight:700}
     .badge{padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}
-    .b-success{background:#064e3b;color:#86efac}
-    .b-warn{background:#2f2a12;color:#fde68a}
-    .b-fail{background:#3a121a;color:#fecaca}
-    .muted{color:#9aa4b2}
+    .b-success{background:#e6fffa;color:#065f46}
+    .b-warn{background:#fff7ed;color:#92400e}
+    .b-fail{background:#fef2f2;color:#991b1b}
+    .muted{color:#6b7280}
     table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid #1f2a44;text-align:left}
-    code{background:#0b1220;padding:2px 5px;border-radius:6px;border:1px solid #1f2a44}
+    th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:left}
+    code{background:#f9fafb;padding:2px 5px;border-radius:6px;border:1px solid #e5e7eb}
   </style>
-</head>
-<body>
-  <header>
-    <div><strong>Transaction #{{ $t->id }}</strong></div>
-    <div style="display:flex;gap:8px">
-      <a class="btn" href="{{ route('transactions.index') }}">Back to Transactions</a>
-      <a class="btn" href="{{ route('transfer.receipt', $t) }}">Open Receipt</a>
-    </div>
-  </header>
   <div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div><strong>Transaction #{{ $t->id }}</strong></div>
+      <div style="display:flex;gap:8px">
+        <a class="btn" href="{{ route('transactions.index') }}">Back to Transactions</a>
+        <a class="btn" href="{{ route('transfer.receipt', $t) }}">Open Receipt</a>
+      </div>
+    </div>
 
     <div class="grid">
       <div class="card">
@@ -95,5 +86,4 @@
     </div>
 
   </div>
-</body>
-</html>
+@endsection

@@ -58,9 +58,11 @@ class ProcessPawaPayDeposit implements ShouldQueue
                 case 'FAILED':
                 case 'REJECTED':
                 case 'EXPIRED':
+                case 'CANCELLED':
                     $this->handleFailedPayment($transfer, $timeline, $payload);
                     break;
                 case 'PENDING':
+                case 'SUBMITTED':
                     $this->handlePendingPayment($transfer, $timeline);
                     break;
                 default:
@@ -103,11 +105,26 @@ class ProcessPawaPayDeposit implements ShouldQueue
 
     protected function handleFailedPayment(Transfer $transfer, array &$timeline, array $payload): void
     {
-        $reason = $payload['reason'] ?? $payload['message'] ?? 'Payment failed';
+        $failureMap = [
+            'PAYER_LIMIT_REACHED' => 'Payer reached provider limit. Try a lower amount or later.',
+            'PAYER_NOT_FOUND' => 'Mobile wallet not found. Please check the MSISDN.',
+            'PAYMENT_NOT_APPROVED' => 'Payment was not approved by the provider.',
+            'INSUFFICIENT_BALANCE' => 'Insufficient wallet balance.',
+            'UNSPECIFIED_FAILURE' => 'Payment failed due to an unspecified error.',
+            'EXPIRED' => 'Payment request expired.',
+            'CANCELLED' => 'Payment request was cancelled.',
+        ];
+        $failureCode = strtoupper((string) ($payload['failureCode'] ?? ''));
+        $provider = $payload['payer']['accountDetails']['provider'] ?? ($payload['provider'] ?? null);
+        $msisdn = $payload['payer']['accountDetails']['phoneNumber'] ?? ($payload['msisdn'] ?? null);
+        $reason = $payload['reason'] ?? $payload['message'] ?? ($failureMap[$failureCode] ?? 'Payment failed');
         $timeline[] = [
             'state' => 'payin_failed',
             'at' => now()->toIso8601String(),
             'reason' => $reason,
+            'failure_code' => $failureCode ?: null,
+            'provider' => $provider,
+            'msisdn' => $msisdn,
             'payload' => $payload,
         ];
         $transfer->update([
@@ -115,7 +132,13 @@ class ProcessPawaPayDeposit implements ShouldQueue
             'status' => 'failed',
             'timeline' => $timeline,
         ]);
-        Log::warning('Payment failed', ['transfer_id' => $transfer->id, 'reason' => $reason]);
+        Log::warning('Payment failed', [
+            'transfer_id' => $transfer->id,
+            'reason' => $reason,
+            'failure_code' => $failureCode ?: null,
+            'provider' => $provider,
+            'msisdn' => $msisdn,
+        ]);
     }
 
     protected function handlePendingPayment(Transfer $transfer, array &$timeline): void
@@ -132,19 +155,100 @@ class ProcessPawaPayDeposit implements ShouldQueue
         ]);
     }
 
-    protected function initiatePayout(Transfer $transfer, array &$timeline, SafeHaven $safeHaven): void
+    protected function initiatePayout(Transfer $transfer, array &$timeline, SafeHaven $safeHaven, \App\Services\RefundService $refundService = null): void
     {
         try {
             if (empty($transfer->recipient_account_number) || empty($transfer->recipient_bank_code)) {
                 throw new \Exception('Missing recipient details for payout');
             }
+
+            // Just-in-time name enquiry to ensure a fresh reference before payout
+            $enquiry = $safeHaven->nameEnquiry($transfer->recipient_bank_code, $transfer->recipient_account_number);
+            if (!($enquiry['success'] ?? false)) {
+                $reason = $enquiry['raw']['friendlyMessage'] ?? ($enquiry['raw']['message'] ?? 'Name enquiry failed');
+                $timeline[] = [
+                    'state' => 'name_enquiry_failed',
+                    'at' => now()->toIso8601String(),
+                    'reason' => $reason,
+                    'raw' => $enquiry['raw'] ?? null,
+                ];
+                $transfer->update([
+                    'status' => 'failed',
+                    'timeline' => $timeline,
+                ]);
+                \Log::error('JIT Name enquiry failed before payout', [
+                    'transfer_id' => $transfer->id,
+                    'bank_code' => $transfer->recipient_bank_code,
+                    'account_number' => $transfer->recipient_account_number,
+                    'response' => $enquiry['raw'] ?? null,
+                ]);
+                return;
+            }
+            // Update transfer with fresh reference and account name if provided
+            $transfer->name_enquiry_reference = $enquiry['reference'] ?? $transfer->name_enquiry_reference;
+            if (!empty($enquiry['account_name'])) {
+                $transfer->recipient_account_name = $enquiry['account_name'];
+            }
+            // Sanity check: prevent paying to our own debit account
+            $debitAcct = (string) env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER');
+            if (!empty($debitAcct) && $transfer->recipient_account_number === $debitAcct) {
+                $timeline[] = [
+                    'state' => 'payout_blocked_same_debit',
+                    'at' => now()->toIso8601String(),
+                    'reason' => 'Beneficiary account matches debit account; payout aborted for safety.',
+                ];
+                $transfer->update([
+                    'status' => 'failed',
+                    'payout_status' => 'failed',
+                    'timeline' => $timeline,
+                ]);
+                \Log::error('Payout aborted: beneficiary equals debit account', [
+                    'transfer_id' => $transfer->id,
+                    'beneficiary' => $transfer->recipient_account_number,
+                    'debit' => $debitAcct,
+                ]);
+                return;
+            }
+
+            // Extra safety: ensure NE response accountNumber matches recipient; otherwise, abort
+            $neAcct = (string) ($enquiry['raw']['data']['accountNumber'] ?? $enquiry['raw']['accountNumber'] ?? '');
+            if ($neAcct && $neAcct !== $transfer->recipient_account_number) {
+                $timeline[] = [
+                    'state' => 'name_enquiry_mismatch',
+                    'at' => now()->toIso8601String(),
+                    'reason' => 'NE account mismatch vs stored recipient; payout aborted.',
+                    'ne_account' => $neAcct,
+                    'recipient_account' => $transfer->recipient_account_number,
+                ];
+                $transfer->update([
+                    'status' => 'failed',
+                    'payout_status' => 'failed',
+                    'timeline' => $timeline,
+                ]);
+                \Log::error('NE account mismatch; aborting payout', [
+                    'transfer_id' => $transfer->id,
+                    'ne_account' => $neAcct,
+                    'recipient_account' => $transfer->recipient_account_number,
+                ]);
+                return;
+            }
+            $transfer->save();
+            // Build a safe, compact narration including sender name and reference
+            $idempotencyKey = (string) Str::uuid();
+            $sender = trim((string) ($transfer->user->name ?? $transfer->user->email ?? 'TEXA'));
+            $sender = str_replace(["|", "\n", "\r"], ' ', $sender);
+            if (strlen($sender) > 32) { $sender = substr($sender, 0, 32); }
+            $baseNarr = 'Internal Fund Transfer|TexaPay transfer ' . $transfer->id . '|' . $idempotencyKey . '|' . $sender;
+            // Cap overall narration length to ~120 chars to avoid provider truncation
+            $narration = strlen($baseNarr) > 120 ? substr($baseNarr, 0, 120) : $baseNarr;
+
             $resp = $safeHaven->payout([
                 'amount_ngn_minor' => $transfer->receive_ngn_minor,
                 'bank_code' => $transfer->recipient_bank_code,
                 'account_number' => $transfer->recipient_account_number,
                 'account_name' => $transfer->recipient_account_name,
-                'narration' => 'TexaPay transfer ' . $transfer->id,
-                'reference' => (string) Str::uuid(),
+                'narration' => $narration,
+                'reference' => $idempotencyKey,
                 'name_enquiry_reference' => $transfer->name_enquiry_reference,
                 'debit_account_number' => env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER'),
             ]);
@@ -153,6 +257,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
                 'state' => 'payout_initiated',
                 'at' => now()->toIso8601String(),
                 'reference' => $resp['ref'] ?? null,
+                'narration' => $narration,
                 'response' => $resp,
             ];
             $status = $resp['status'] ?? 'pending';
@@ -167,25 +272,66 @@ class ProcessPawaPayDeposit implements ShouldQueue
                 $timeline[] = [
                     'state' => 'completed',
                     'at' => now()->toIso8601String(),
-                    'message' => 'Payout completed successfully',
+                    
                 ];
                 $transfer->update([
                     'payout_completed_at' => now(),
                     'status' => 'completed',
                     'timeline' => $timeline,
                 ]);
+                // Update transaction limits idempotently so dashboard usage stays in sync
+                try {
+                    $limitCheck = app(\App\Services\LimitCheckService::class);
+                    $limitCheck->recordCompletedTransferOnce($transfer->fresh());
+                } catch (\Throwable $e) {
+                    \Log::error('Failed to record completed transfer in limits system', [
+                        'transfer_id' => $transfer->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             } elseif ($status === 'failed') {
-                $reason = $resp['message'] ?? ($resp['error'] ?? 'Payout failed');
+                $respCode = $resp['raw']['responseCode'] ?? null;
+                $httpStatus = $resp['raw']['statusCode'] ?? ($resp['raw']['status'] ?? null);
+                // If provider reports failure via code/status, do not display a success-sounding message
+                $fallback = 'Payout failed';
+                if (!empty($respCode) && $respCode !== '00') {
+                    $fallback .= ' (code ' . $respCode . ')';
+                } elseif (!empty($httpStatus) && (int) $httpStatus >= 400) {
+                    $fallback .= ' (http ' . $httpStatus . ')';
+                }
+                $reason = $resp['error']
+                    ?? ($respCode !== '00' && !empty($respCode) ? $fallback : null)
+                    ?? ($httpStatus && (int)$httpStatus >= 400 ? $fallback : null)
+                    ?? ($resp['message'] ?? ($resp['raw']['message'] ?? $fallback));
                 $timeline[] = [
                     'state' => 'payout_failed',
                     'at' => now()->toIso8601String(),
                     'reason' => $reason,
+                    'response_code' => $respCode,
+                    'http_status' => $httpStatus,
                 ];
                 $transfer->update([
                     'status' => 'failed',
                     'timeline' => $timeline,
                 ]);
                 Log::error('Payout failed', ['transfer_id' => $transfer->id, 'reason' => $reason, 'response' => $resp]);
+
+                // If payin succeeded but payout failed, initiate refund
+                if ($transfer->payin_status === 'success') {
+                    $refundService = $refundService ?? app(\App\Services\RefundService::class);
+                    try {
+                        $result = $refundService->refundFailedPayout($transfer);
+                        Log::info('Refund initiation result after payout failure', [
+                            'transfer_id' => $transfer->id,
+                            'result' => $result,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::error('Refund initiation threw exception', [
+                            'transfer_id' => $transfer->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
         } catch (\Exception $e) {
             Log::error('Error initiating payout', ['transfer_id' => $transfer->id, 'error' => $e->getMessage()]);
