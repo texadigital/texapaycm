@@ -11,6 +11,7 @@ use App\Models\AdminSetting;
 use App\Services\PricingEngine;
 use App\Services\RefundService;
 use App\Services\LimitCheckService;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,13 @@ use Illuminate\Support\Facades\URL;
 
 class TransferController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     public function showBankForm(Request $request): View
     {
         $data = [
@@ -227,6 +235,12 @@ class TransferController extends Controller
         ]);
 
         session(['transfer.quote_id' => $quote->id]);
+        
+        // Send quote created notification
+        $this->notificationService->dispatchUserNotification('transfer.quote.created', $quote->user, [
+            'quote' => $quote->toArray()
+        ]);
+        
         return redirect()->route('transfer.quote')->with('quote_ready', true);
     }
 
@@ -471,6 +485,11 @@ class TransferController extends Controller
             'transfer_id' => $transfer->id,
             'reference' => $reference,
             'provider' => $provider
+        ]);
+        
+        // Send transfer initiated notification
+        $this->notificationService->dispatchUserNotification('transfer.initiated', $transfer->user, [
+            'transfer' => $transfer->toArray()
         ]);
         
         // Redirect to receipt page with pending status

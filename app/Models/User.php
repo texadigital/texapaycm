@@ -207,6 +207,54 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Get the user's notifications
+     */
+    public function notifications()
+    {
+        return $this->hasMany(UserNotification::class);
+    }
+
+    /**
+     * Get the user's notification preferences
+     */
+    public function notificationPreferences()
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
+    /**
+     * Get the user's unread notifications
+     */
+    public function unreadNotifications()
+    {
+        return $this->notifications()->unread();
+    }
+
+    /**
+     * Get the user's read notifications
+     */
+    public function readNotifications()
+    {
+        return $this->notifications()->read();
+    }
+
+    /**
+     * Get the user's devices
+     */
+    public function devices()
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
+    /**
+     * Get the user's active devices
+     */
+    public function activeDevices()
+    {
+        return $this->devices()->where('is_active', true);
+    }
+
+    /**
      * Restrict Filament panel access to admins only.
      */
     public function canAccessPanel(FilamentPanel $panel): bool

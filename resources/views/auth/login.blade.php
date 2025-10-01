@@ -58,12 +58,10 @@
                                 </button>
 
                                 <div class="mt-3">
-                                    <p class="mb-2">Don't have an account? <a href="{{ route('register') }}" class="text-primary">Register Now</a></p>
-                                    @if (Route::has('password.request'))
-                                        <a class="btn btn-link p-0" href="{{ route('password.request') }}">
-                                            {{ __('Forgot Your Password?') }}
-                                        </a>
-                                    @endif
+                                    <p class="mb-2">Don't have an account? <a href="{{ route('register.show') }}" class="text-primary">Register Now</a></p>
+                                    <a class="btn btn-link p-0" href="{{ route('password.forgot') }}">
+                                        {{ __('Forgot Your Password?') }}
+                                    </a>
                                 </div>
                             </div>
                         </div>

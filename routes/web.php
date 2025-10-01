@@ -56,6 +56,12 @@ Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->n
 Route::get('/login/pin', [\App\Http\Controllers\AuthController::class, 'showPinChallenge'])->name('login.pin.show');
 Route::post('/login/pin', [\App\Http\Controllers\AuthController::class, 'verifyPinChallenge'])->name('login.pin.verify');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
+
+// Password Reset
+Route::get('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'showForgotPassword'])->name('password.forgot');
+Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'sendResetCode'])->name('password.email');
+Route::get('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'showResetPassword'])->name('password.reset');
+Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword'])->name('password.update');
 Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
@@ -85,6 +91,16 @@ Route::middleware(['auth','redirect.admins'])->group(function () {
         Route::get('/contact', [\App\Http\Controllers\SupportController::class, 'contact'])->name('support.contact');
         Route::post('/contact', [\App\Http\Controllers\SupportController::class, 'submitTicket'])->name('support.contact.submit');
         Route::get('/tickets', [\App\Http\Controllers\SupportController::class, 'myTickets'])->name('support.tickets');
+    });
+
+    // Notification routes
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/summary', [\App\Http\Controllers\NotificationController::class, 'summary'])->name('notifications.summary');
+        Route::put('/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::put('/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('notifications.read_all');
+        Route::get('/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])->name('notifications.preferences');
+        Route::put('/preferences', [\App\Http\Controllers\NotificationController::class, 'updatePreferences'])->name('notifications.preferences.update');
     });
 });
 

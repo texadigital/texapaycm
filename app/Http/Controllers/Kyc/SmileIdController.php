@@ -6,12 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
 use App\Models\User;
 use App\Services\SmileIdService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class SmileIdController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Return a Web Token for the Smile ID Web Integration when the official library is available.
      * Falls back to our existing start-session payload if the library is not installed.
@@ -52,6 +60,12 @@ class SmileIdController extends Controller
             $user->increment('kyc_attempts');
             $user->update(['kyc_status' => 'pending']);
 
+            // Send KYC started notification
+            $this->notificationService->dispatchUserNotification('kyc.started', $user, [
+                'provider' => 'smileid',
+                'job_id' => $jobId
+            ]);
+
             return response()->json(['enabled' => true, 'token' => $token['token'] ?? $token]);
         }
 
@@ -59,6 +73,13 @@ class SmileIdController extends Controller
         $session = $svc->startSession($user);
         $user->increment('kyc_attempts');
         $user->update(['kyc_status' => 'pending']);
+        
+        // Send KYC started notification
+        $this->notificationService->dispatchUserNotification('kyc.started', $user, [
+            'provider' => 'smileid',
+            'job_id' => $session['partner_params']['job_id'] ?? null
+        ]);
+        
         return response()->json(['enabled' => true, 'provider' => 'smileid', 'session' => $session]);
     }
     public function start(Request $request, SmileIdService $svc)
@@ -86,6 +107,12 @@ class SmileIdController extends Controller
         $user->increment('kyc_attempts');
         $user->update([
             'kyc_status' => 'pending',
+        ]);
+
+        // Send KYC started notification
+        $this->notificationService->dispatchUserNotification('kyc.started', $user, [
+            'provider' => 'smileid',
+            'job_id' => $session['partner_params']['job_id'] ?? null
         ]);
 
         return response()->json([
@@ -137,6 +164,19 @@ class SmileIdController extends Controller
         }
 
         $user->update($updates);
+
+        // Send KYC completion notification
+        if ($mapped['kyc_status'] === 'verified') {
+            $this->notificationService->dispatchUserNotification('kyc.completed', $user, [
+                'level' => $mapped['kyc_level'],
+                'provider_ref' => $providerRef
+            ]);
+        } else {
+            $this->notificationService->dispatchUserNotification('kyc.failed', $user, [
+                'reason' => $payload['ResultText'] ?? 'Verification failed',
+                'provider_ref' => $providerRef
+            ]);
+        }
 
         Log::info('kyc_webhook_processed', [
             'user_id' => $user->id,

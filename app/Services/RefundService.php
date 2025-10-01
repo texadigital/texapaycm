@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Transfer;
+use App\Services\NotificationService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -12,9 +13,11 @@ class RefundService
     protected string $apiKey;
     protected bool $isSandbox;
     protected ?string $caBundle = null;
+    protected NotificationService $notificationService;
 
-    public function __construct()
+    public function __construct(NotificationService $notificationService)
     {
+        $this->notificationService = $notificationService;
         // Get the base URL from config (defaults to sandbox)
         $this->baseUrl = rtrim(config('services.pawapay.base_url'), '/') . '/v2';
         $this->apiKey = config('services.pawapay.api_key');
@@ -162,6 +165,13 @@ class RefundService
                 ]);
                 $transfer->timeline = $timeline;
                 $transfer->save();
+
+                // Send refund initiated notification
+                $this->notificationService->dispatchUserNotification('transfer.refund.initiated', $transfer->user, [
+                    'transfer' => $transfer->toArray(),
+                    'refund_id' => $refundId
+                ]);
+
                 return [
                     'success' => true,
                     'message' => 'Refund initiated successfully',

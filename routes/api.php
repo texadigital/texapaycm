@@ -113,6 +113,30 @@ Route::middleware([
         Route::put('/profile/notifications', [\App\Http\Controllers\Api\ProfileController::class, 'updateNotifications'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.profile.notifications.update');
+        
+        // Notification management
+        Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('api.mobile.notifications.index');
+        Route::get('/notifications/summary', [\App\Http\Controllers\NotificationController::class, 'summary'])->name('api.mobile.notifications.summary');
+        Route::put('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.read');
+        Route::put('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.read_all');
+        Route::get('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])->name('api.mobile.notifications.preferences');
+        Route::put('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'updatePreferences'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.preferences.update');
+        
+        // Device management for push notifications
+        Route::post('/devices/register', [\App\Http\Controllers\Api\DeviceController::class, 'register'])->name('api.mobile.devices.register');
+        Route::delete('/devices/unregister', [\App\Http\Controllers\Api\DeviceController::class, 'unregister'])->name('api.mobile.devices.unregister');
+        Route::get('/devices', [\App\Http\Controllers\Api\DeviceController::class, 'devices'])->name('api.mobile.devices.index');
+        Route::post('/devices/test-push', [\App\Http\Controllers\Api\DeviceController::class, 'testPush'])->name('api.mobile.devices.test_push');
+        
+        // Password Reset (Mobile API)
+        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])->name('api.mobile.auth.forgot_password');
+        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])->name('api.mobile.auth.reset_password');
 
         // Policies
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
