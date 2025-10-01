@@ -2,7 +2,7 @@
   "info": {
     "name": "TexaPay Mobile API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL."
+    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status:\n   - Use the \"Transfers - Timeline\" request with the returned transferId\n\nNote: Make sure to log in first to establish a session."
   },
   "item": [
     {
@@ -97,6 +97,14 @@
       }
     },
     {
+      "name": "KYC - Get Web Token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/web-token", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","web-token"] }
+      }
+    },
+    {
       "name": "KYC - Status",
       "request": {
         "method": "GET",
@@ -149,17 +157,18 @@
         "method": "POST",
         "header": [
           { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Requested-With", "value": "XMLHttpRequest" },
           { "key": "Idempotency-Key", "value": "{{idemKey}}" }
         ],
         "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "quoteId", "value": "{{quoteId}}" },
-            { "key": "bankCode", "value": "999240" },
-            { "key": "accountNumber", "value": "0119215210" },
-            { "key": "msisdn", "value": "237653456789" }
-          ]
+          "mode": "raw",
+          "raw": "{\\n    \\\"quoteId\\\": \\\"{{quoteId}}\\\",\\n    \\\"quoteRef\\\": \\\"{{quoteRef}}\\\",\\n    \\\"bankCode\\\": \\\"{{bankCode}}\\\",\\n    \\\"accountNumber\\\": \\\"{{accountNumber}}\\\",\\n    \\\"msisdn\\\": \\\"{{msisdn}}\\\",\\n    \\\"pin\\\": \\\"{{pin}}\\\"\\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
         },
         "url": { "raw": "{{baseUrl}}/api/mobile/transfers/confirm", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","confirm"] }
       }
@@ -371,9 +380,13 @@
   ],
   "variable": [
     { "key": "baseUrl", "value": "https://pay.texa.ng" },
-    { "key": "quoteId", "value": "44" },
-    { "key": "transferId", "value": "33" },
-    { "key": "ticketId", "value": "1" },
-    { "key": "idemKey", "value": "{{$guid}}" }
+    { "key": "idemKey", "value": "{{$guid}}" },
+    { "key": "quoteId", "value": "" },
+    { "key": "quoteRef", "value": "" },
+    { "key": "bankCode", "value": "999240" },
+    { "key": "accountNumber", "value": "0119215210" },
+    { "key": "msisdn", "value": "237653456789" },
+    { "key": "pin", "value": "1234" },
+    { "key": "transferId", "value": "" }
   ]
 }

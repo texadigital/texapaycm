@@ -12,7 +12,14 @@ use Illuminate\Http\Request;
 | maintain session cookie after /auth/login.
 */
 
-Route::middleware(['web','throttle:api','force.json','idempotency'])
+Route::middleware([
+        'web',
+        'throttle:60,1',
+        'force.json',
+        'idempotency',
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    ])
     ->prefix('mobile')
     ->group(function () {
     // Health & feature status endpoint should always be reachable
@@ -24,14 +31,26 @@ Route::middleware(['web','throttle:api','force.json','idempotency'])
     // Gate all other endpoints behind feature flag
     Route::middleware(['mobile.feature'])->group(function () {
         // Auth - session cookie based
+        // Auth endpoints with CSRF exemption
         Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->withoutMiddleware([
+                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+                \App\Http\Middleware\VerifyCsrfToken::class
+            ])
             ->name('api.mobile.auth.register');
+            
         Route::post('/auth/login', [\App\Http\Controllers\Api\AuthController::class, 'login'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->withoutMiddleware([
+                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+                \App\Http\Middleware\VerifyCsrfToken::class
+            ])
             ->name('api.mobile.auth.login');
+            
         Route::post('/auth/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->withoutMiddleware([
+                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+                \App\Http\Middleware\VerifyCsrfToken::class
+            ])
             ->name('api.mobile.auth.logout');
 
     // Public banks endpoints (reuse existing logic)

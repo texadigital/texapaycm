@@ -81,9 +81,9 @@
                                     {{ __('Create account') }}
                                 </button>
 
-                                <a class="btn btn-link" href="{{ route('login.show') }}">
-                                    {{ __('Already have an account? Sign in') }}
-                                </a>
+                                <div class="mt-3">
+                                    <p class="mb-0">Already have an account? <a href="{{ route('login') }}" class="text-primary">Sign In Now</a></p>
+                                </div>
                             </div>
                         </div>
                     </form>
