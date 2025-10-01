@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
@@ -42,8 +43,8 @@ class PasswordResetController extends Controller
         ]);
 
         try {
-            // Clean and format phone number
-            $phone = preg_replace('/\D+/', '', $request->phone);
+            // Normalize phone number to international format
+            $phone = PhoneNumberService::normalize($request->phone);
             $user = User::where('phone', $phone)->first();
             
             if (!$user) {
@@ -203,8 +204,8 @@ class PasswordResetController extends Controller
         ]);
 
         try {
-            // Clean and format phone number
-            $phone = preg_replace('/\D+/', '', $request->phone);
+            // Normalize phone number to international format
+            $phone = PhoneNumberService::normalize($request->phone);
             $user = User::where('phone', $phone)->first();
             
             if (!$user) {
@@ -271,8 +272,8 @@ class PasswordResetController extends Controller
         ]);
 
         try {
-            // Clean and format phone number
-            $phone = preg_replace('/\D+/', '', $request->phone);
+            // Normalize phone number to international format
+            $phone = PhoneNumberService::normalize($request->phone);
             $user = User::where('phone', $phone)->first();
             
             if (!$user) {
