@@ -57,11 +57,14 @@
                                     {{ __('Login') }}
                                 </button>
 
-                                @if (Route::has('password.request'))
-                                    <a class="btn btn-link" href="{{ route('password.request') }}">
-                                        {{ __('Forgot Your Password?') }}
-                                    </a>
-                                @endif
+                                <div class="mt-3">
+                                    <p class="mb-2">Don't have an account? <a href="{{ route('register') }}" class="text-primary">Register Now</a></p>
+                                    @if (Route::has('password.request'))
+                                        <a class="btn btn-link p-0" href="{{ route('password.request') }}">
+                                            {{ __('Forgot Your Password?') }}
+                                        </a>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                     </form>
