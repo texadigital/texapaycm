@@ -12,6 +12,7 @@ use App\Services\PricingEngine;
 use App\Services\RefundService;
 use App\Services\LimitCheckService;
 use App\Services\NotificationService;
+use App\Services\PhoneNumberService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -281,31 +282,16 @@ class TransferController extends Controller
         ]);
         // No OTP capture here; providers will handle authorisation out-of-band if needed.
 
-        // Normalize MSISDN to E.164 for Cameroon and auto-detect provider
-        $rawMsisdn = preg_replace('/\s+/', '', $validated['msisdn']);
-        $digits = preg_replace('/\D+/', '', $rawMsisdn ?? '');
-        if (str_starts_with($digits, '00')) { $digits = substr($digits, 2); }
-        if (str_starts_with($rawMsisdn, '+')) { /* already handled by removing non-digits */ }
-        if (strlen($digits) === 9 && str_starts_with($digits, '6')) {
-            // Local CM format -> add country code
-            $digits = '237' . $digits;
+        // Normalize phone number using PhoneNumberService
+        $phone = PhoneNumberService::normalize($validated['msisdn']);
+        
+        // Validate Cameroon phone number
+        $validation = PhoneNumberService::validateCameroon($phone);
+        if (!$validation['valid']) {
+            return back()->with('error', $validation['error']);
         }
         
-        // Enhanced validation of CM E.164
-        if (!(strlen($digits) === 12 && str_starts_with($digits, '237'))) {
-            return back()->with('error', 'Please enter a valid Cameroon MoMo number in international format (e.g., 2376XXXXXXXX).');
-        }
-        
-        // Validate provider-specific format
-        $prefix3 = substr($digits, 3, 3);
-        $isValidMtn = preg_match('/^(65[0-9]|6[7-8][0-9])/', $prefix3);
-        $isValidOrange = preg_match('/^69[0-9]/', $prefix3);
-        
-        if (!($isValidMtn || $isValidOrange)) {
-            return back()->with('error', 'Invalid mobile money number. Please enter a valid MTN or Orange mobile money number.');
-        }
-        
-        $msisdn = $digits;
+        $msisdn = $validation['normalized'];
 
         // Provider detection for Cameroon via .env-configurable prefixes
         $prefix3 = substr($msisdn, 3, 3); // digits after 237

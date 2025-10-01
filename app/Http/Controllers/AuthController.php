@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Transfer;
 use App\Models\LoginHistory;
 use App\Services\NotificationService;
+use App\Services\PhoneNumberService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -91,7 +92,14 @@ class AuthController extends Controller
             'pin' => ['required','string','regex:/^\d{4,6}$/'],
         ]);
 
-        $phone = preg_replace('/\D+/', '', $validated['phone']);
+        // Normalize phone number to international format
+        $phone = PhoneNumberService::normalize($validated['phone']);
+        
+        // Validate Cameroon phone number
+        $validation = PhoneNumberService::validateCameroon($phone);
+        if (!$validation['valid']) {
+            return back()->withErrors(['phone' => $validation['error']]);
+        }
 
         // Email is mandatory in the current schema; use a placeholder derived from phone
         $email = $phone . '@local';
@@ -126,7 +134,8 @@ class AuthController extends Controller
             'phone' => ['required','string','max:32'],
             'password' => ['required','string','max:190'],
         ]);
-        $phone = preg_replace('/\D+/', '', $credentials['phone']);
+        // Normalize phone number to international format
+        $phone = PhoneNumberService::normalize($credentials['phone']);
 
         $user = User::where('phone', $phone)->first();
         if (!$user || !Hash::check($credentials['password'], $user->password)) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\LoginHistory;
 use App\Models\User;
+use App\Services\PhoneNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -33,7 +34,19 @@ class AuthController extends Controller
             'pin' => ['required','string','regex:/^\d{4,6}$/'],
         ]);
 
-        $phone = preg_replace('/\D+/', '', $data['phone']);
+        // Normalize phone number to international format
+        $phone = PhoneNumberService::normalize($data['phone']);
+        
+        // Validate Cameroon phone number
+        $validation = PhoneNumberService::validateCameroon($phone);
+        if (!$validation['valid']) {
+            return response()->json([
+                'success' => false,
+                'code' => 'INVALID_PHONE',
+                'message' => $validation['error'],
+            ], 400);
+        }
+        
         $email = $phone . '@local';
 
         $user = User::create([
@@ -80,7 +93,8 @@ class AuthController extends Controller
             'pin' => ['nullable','string','regex:/^\d{4,6}$/'],
         ]);
 
-        $phone = preg_replace('/\D+/', '', $data['phone']);
+        // Normalize phone number to international format
+        $phone = PhoneNumberService::normalize($data['phone']);
         $user = User::where('phone', $phone)->first();
         if (!$user || !Hash::check($data['password'], $user->password)) {
             try { LoginHistory::create([

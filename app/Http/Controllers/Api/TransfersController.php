@@ -258,15 +258,16 @@ class TransfersController extends Controller
                 $quote->update(['status' => 'expired']);
                 return response()->json(['success' => false, 'code' => 'QUOTE_EXPIRED', 'message' => 'Quote expired—refresh to get a new rate.'], 400);
             }
-            // Normalize MSISDN as in web flow
-            $rawMsisdn = preg_replace('/\s+/', '', $data['msisdn']);
-            $digits = preg_replace('/\D+/', '', $rawMsisdn ?? '');
-            if (str_starts_with($digits, '00')) { $digits = substr($digits, 2); }
-            if (strlen($digits) === 9 && str_starts_with($digits, '6')) { $digits = '237' . $digits; }
-            if (!(strlen($digits) === 12 && str_starts_with($digits, '237'))) {
-                return response()->json(['success' => false, 'code' => 'INVALID_MSISDN', 'message' => 'Please enter a valid Cameroon MoMo number (e.g., 2376XXXXXXXX).'], 400);
+            // Normalize phone number using PhoneNumberService
+            $phone = \App\Services\PhoneNumberService::normalize($data['msisdn']);
+            
+            // Validate Cameroon phone number
+            $validation = \App\Services\PhoneNumberService::validateCameroon($phone);
+            if (!$validation['valid']) {
+                return response()->json(['success' => false, 'code' => 'INVALID_MSISDN', 'message' => $validation['error']], 400);
             }
-            $msisdn = $digits;
+            
+            $msisdn = $validation['normalized'];
 
             // Provider detection (same heuristic)
             $prefix3 = substr($msisdn, 3, 3);
