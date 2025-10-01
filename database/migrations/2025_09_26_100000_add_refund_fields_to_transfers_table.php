@@ -9,7 +9,9 @@ return new class extends Migration
     public function up()
     {
         Schema::table('transfers', function (Blueprint $table) {
-            $table->string('refund_id')->nullable()->after('payout_id');
+            // In MySQL, ensure we reference an existing column for positioning.
+            // 'payout_id' does not exist in our schema; use 'payout_ref' instead.
+            $table->string('refund_id')->nullable()->after('payout_ref');
             $table->string('refund_status', 20)->nullable()->after('refund_id');
             $table->timestamp('refund_attempted_at')->nullable()->after('refund_status');
             $table->timestamp('refund_completed_at')->nullable()->after('refund_attempted_at');

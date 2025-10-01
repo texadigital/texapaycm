@@ -245,6 +245,20 @@ class TransferController extends Controller
             return back()->with('error', 'Quote expired—Refresh to get a new rate.');
         }
 
+        // IDEMPOTENCY PROTECTION: Check if a transfer already exists for this quote
+        $existingTransfer = Transfer::where('quote_id', $quote->id)->first();
+        if ($existingTransfer) {
+            \Log::info('Duplicate transfer attempt prevented', [
+                'quote_id' => $quote->id,
+                'existing_transfer_id' => $existingTransfer->id,
+                'user_id' => auth()->id(),
+                'ip' => $request->ip()
+            ]);
+            return redirect()
+                ->route('transfer.receipt', $existingTransfer)
+                ->with('info', 'Transaction already exists. Redirecting to receipt.');
+        }
+
         // Minimal MSISDN capture for demo
         $validated = $request->validate([
             'msisdn' => ['required','string','min:8','max:20'],

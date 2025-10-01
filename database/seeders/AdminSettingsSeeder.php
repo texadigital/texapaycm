@@ -224,6 +224,26 @@ class AdminSettingsSeeder extends Seeder
                 'is_public' => true,
             ],
             
+            // Mobile API Settings
+            [
+                'setting_key' => 'mobile_api_enabled',
+                'setting_value' => '1',
+                'setting_type' => 'boolean',
+                'description' => 'Enable mobile API endpoints for mobile applications',
+                'category' => 'api',
+                'sort_order' => 1,
+                'is_public' => false,
+            ],
+            [
+                'setting_key' => 'kyc_enabled',
+                'setting_value' => '1',
+                'setting_type' => 'boolean',
+                'description' => 'Enable KYC verification flow for users',
+                'category' => 'api',
+                'sort_order' => 2,
+                'is_public' => true,
+            ],
+
             // Company Information
             [
                 'setting_key' => 'company_name',

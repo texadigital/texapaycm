@@ -3,7 +3,7 @@ info:
   title: TexaPay Mobile API
   version: 1.0.0
 servers:
-  - url: https://malika-jubilant-seriously.ngrok-free.dev
+  - url: https://pay.texa.ng
     description: Ngrok tunnel
 paths:
   /api/mobile/feature:
