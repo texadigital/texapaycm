@@ -237,9 +237,11 @@ class TransferController extends Controller
         session(['transfer.quote_id' => $quote->id]);
         
         // Send quote created notification
-        $this->notificationService->dispatchUserNotification('transfer.quote.created', $quote->user, [
-            'quote' => $quote->toArray()
-        ]);
+        if ($quote->user) {
+            $this->notificationService->dispatchUserNotification('transfer.quote.created', $quote->user, [
+                'quote' => $quote->toArray()
+            ]);
+        }
         
         return redirect()->route('transfer.quote')->with('quote_ready', true);
     }
@@ -488,9 +490,11 @@ class TransferController extends Controller
         ]);
         
         // Send transfer initiated notification
-        $this->notificationService->dispatchUserNotification('transfer.initiated', $transfer->user, [
-            'transfer' => $transfer->toArray()
-        ]);
+        if ($transfer->user) {
+            $this->notificationService->dispatchUserNotification('transfer.initiated', $transfer->user, [
+                'transfer' => $transfer->toArray()
+            ]);
+        }
         
         // Redirect to receipt page with pending status
         return redirect()

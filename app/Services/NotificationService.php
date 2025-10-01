@@ -19,11 +19,20 @@ class NotificationService
      */
     public function dispatchUserNotification(
         string $type,
-        User $user,
+        ?User $user,
         array $payload = [],
         array $channels = null
     ): ?UserNotification {
         try {
+            // Check if user exists
+            if (!$user) {
+                Log::warning('Cannot dispatch notification - user is null', [
+                    'type' => $type,
+                    'payload' => $payload
+                ]);
+                return null;
+            }
+
             // Check if user has notification preferences enabled
             if (!$this->shouldSendNotification($user, $type)) {
                 return null;
