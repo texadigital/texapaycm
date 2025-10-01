@@ -370,7 +370,7 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "https://malika-jubilant-seriously.ngrok-free.dev" },
+    { "key": "baseUrl", "value": "https://pay.texa.ng" },
     { "key": "quoteId", "value": "44" },
     { "key": "transferId", "value": "33" },
     { "key": "ticketId", "value": "1" },

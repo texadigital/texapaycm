@@ -15,7 +15,7 @@
 /node_modules
 /public/build
 /public/hot
-/public/storage
+
 /storage/*.key
 /storage/pail
 /vendor
@@ -23,14 +23,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
-# Safe Haven private keys and certificates
-safehaven_private.pem
-safehaven_public.crt
-safehaven_public.pem
-*.pem
-*.crt
-*.cer
-key.md
+
 
 # Environment files
 .env.local
