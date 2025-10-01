@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\Faq;
 use App\Models\SupportTicket;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\SupportTicketSubmitted;
 
 class SupportController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     public function help()
     {
         $faqs = Faq::query()->where('is_active', true)->orderBy('category')->orderBy('id')->get();
@@ -34,6 +42,11 @@ class SupportController extends Controller
             'subject' => $validated['subject'],
             'message' => $validated['message'],
             'priority' => $validated['priority'] ?? 'normal',
+        ]);
+
+        // Send support ticket created notification
+        $this->notificationService->dispatchUserNotification('support.ticket.created', $ticket->user, [
+            'ticket' => $ticket->toArray()
         ]);
 
         // Email notifications

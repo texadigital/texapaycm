@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Transfer;
 use App\Models\LoginHistory;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,6 +14,13 @@ use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     public function showRegister()
     {
         return view('auth.register');
@@ -62,6 +70,14 @@ class AuthController extends Controller
                 'device_info' => null,
             ]);
         } catch (\Throwable $e) { /* swallow */ }
+        
+        // Send login success notification
+        $this->notificationService->dispatchUserNotification('auth.login.success', $user, [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'login_method' => 'password+pin'
+        ]);
+        
         $request->session()->forget(['pin_challenge_user','pin_challenge_expires']);
         return redirect()->intended(route('dashboard'));
     }
@@ -89,6 +105,13 @@ class AuthController extends Controller
         ]);
 
         Auth::login($user);
+        
+        // Send registration success notification
+        $this->notificationService->dispatchUserNotification('user.registered', $user, [
+            'registration_method' => 'phone',
+            'phone' => $phone
+        ]);
+        
         return redirect()->route('dashboard')->with('success', 'Welcome to TexaPay!');
     }
 
@@ -118,6 +141,16 @@ class AuthController extends Controller
                     'device_info' => null,
                 ]);
             } catch (\Throwable $e) { /* swallow */ }
+            
+            // Send failed login notification if user exists
+            if ($user) {
+                $this->notificationService->dispatchUserNotification('auth.login.failed', $user, [
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                    'login_method' => 'password'
+                ]);
+            }
+            
             return back()->withInput()->withErrors(['phone' => 'Invalid phone or password']);
         }
 
@@ -153,6 +186,14 @@ class AuthController extends Controller
                 'device_info' => null,
             ]);
         } catch (\Throwable $e) { /* swallow */ }
+        
+        // Send login success notification
+        $this->notificationService->dispatchUserNotification('auth.login.success', $user, [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'login_method' => 'password'
+        ]);
+        
         // If the user is an admin, send them to the Filament admin panel
         if ((bool) ($user->is_admin ?? false)) {
             return redirect('/admin');

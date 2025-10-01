@@ -41,4 +41,16 @@ return [
         'api_key' => env('PAWAPAY_API_KEY'),
         'webhook_base_url' => rtrim(env('APP_URL', 'http://localhost'), '/'),
     ],
+
+    'twilio' => [
+        'sid' => env('TWILIO_SID'),
+        'auth_token' => env('TWILIO_AUTH_TOKEN'),
+        'phone_number' => env('TWILIO_PHONE_NUMBER'),
+    ],
+
+    'fcm' => [
+        'server_key' => env('FCM_SERVER_KEY'),
+        'project_id' => env('FCM_PROJECT_ID'),
+        'service_account_path' => env('FCM_SERVICE_ACCOUNT_PATH'),
+    ],
 ];
