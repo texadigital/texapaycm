@@ -50,8 +50,12 @@ class NotificationEvent extends Model
      */
     public static function generateEventKey(string $eventType, array $payload = []): string
     {
+        // Sort payload array recursively for consistent hashing
+        $sortedPayload = $payload;
+        ksort($sortedPayload);
+        
         // Create a hash based on event type and payload for deduplication
-        $keyData = $eventType . ':' . json_encode($payload, JSON_SORT_KEYS);
+        $keyData = $eventType . ':' . json_encode($sortedPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         return hash('sha256', $keyData);
     }
 }
