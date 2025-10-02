@@ -31,6 +31,7 @@ Thumbs.db
 .env.testing
 .env.staging
 .env
+.env-e
 
 # Additional environment/secret files
 .env.*
