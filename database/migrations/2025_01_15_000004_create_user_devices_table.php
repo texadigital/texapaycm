@@ -25,7 +25,6 @@ return new class extends Migration
             
             // Indexes for performance
             $table->index(['user_id', 'is_active']);
-            $table->index(['device_token']);
             $table->index(['platform']);
             $table->unique(['user_id', 'device_token']);
         });

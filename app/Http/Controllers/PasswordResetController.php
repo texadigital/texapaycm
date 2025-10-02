@@ -24,6 +24,68 @@ class PasswordResetController extends Controller
     }
 
     /**
+     * Resend reset code with cooldown
+     */
+    public function resendResetCode(Request $request): RedirectResponse
+    {
+        $phone = $request->session()->get('reset_phone');
+        $expires = $request->session()->get('reset_expires');
+        if (!$phone || !$expires || now()->greaterThan($expires)) {
+            return redirect()->route('password.forgot')->withErrors(['phone' => 'Reset session expired. Please request a new code.']);
+        }
+
+        $cooldown = 60; // seconds
+        $lastSent = $request->session()->get('reset_last_sent_at');
+        if ($lastSent && now()->diffInSeconds($lastSent) < $cooldown) {
+            $remaining = $cooldown - now()->diffInSeconds($lastSent);
+            return back()->withErrors(['resend' => 'Please wait ' . $remaining . ' seconds before resending.']);
+        }
+
+        try {
+            $user = User::where('phone', $phone)->first();
+            if (!$user) {
+                return redirect()->route('password.forgot')->withErrors(['phone' => 'User not found.']);
+            }
+
+            $code = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+            $expiresAt = now()->addMinutes(15);
+
+            DB::table('password_resets')->updateOrInsert(
+                ['email' => $user->email],
+                [
+                    'token' => Hash::make($code),
+                    'created_at' => now(),
+                ]
+            );
+
+            $this->notificationService->dispatchUserNotification(
+                'auth.password.reset.requested',
+                $user,
+                [
+                    'title' => 'Password Reset Code',
+                    'message' => "Your password reset code is: {$code}. This code expires in 15 minutes.",
+                    'reset_code' => $code,
+                    'expires_at' => $expiresAt->toISOString(),
+                ],
+                ['sms']
+            );
+
+            // refresh session timers
+            $request->session()->put('reset_expires', $expiresAt);
+            $request->session()->put('reset_last_sent_at', now());
+
+            return back()->with('status', 'A new code has been sent.');
+
+        } catch (\Throwable $e) {
+            Log::error('Password reset resend failed', [
+                'phone' => $phone,
+                'error' => $e->getMessage(),
+            ]);
+            return back()->withErrors(['resend' => 'Unable to resend code. Please try again.']);
+        }
+    }
+
+    /**
      * Show forgot password form
      */
     public function showForgotPassword()
@@ -85,8 +147,10 @@ class PasswordResetController extends Controller
             // Store phone in session for verification step
             $request->session()->put('reset_phone', $phone);
             $request->session()->put('reset_expires', $expiresAt);
+            $request->session()->put('reset_last_sent_at', now());
 
-            return back()->with('status', 'Password reset code has been sent to your phone number.');
+            return redirect()->route('password.verify')
+                ->with('status', 'Password reset code has been sent to your phone number.');
 
         } catch (\Exception $e) {
             Log::error('Password reset code failed', [
@@ -101,7 +165,7 @@ class PasswordResetController extends Controller
     /**
      * Show password reset form
      */
-    public function showResetPassword(Request $request)
+    public function showVerifyCode(Request $request)
     {
         $phone = $request->session()->get('reset_phone');
         $expires = $request->session()->get('reset_expires');
@@ -110,24 +174,31 @@ class PasswordResetController extends Controller
             return redirect()->route('password.forgot')->withErrors(['phone' => 'Reset session expired. Please request a new code.']);
         }
 
-        return view('auth.reset-password', [
+        $lastSent = $request->session()->get('reset_last_sent_at');
+        $cooldown = 60;
+        $resendWait = 0;
+        if ($lastSent) {
+            $diff = now()->diffInSeconds($lastSent);
+            $resendWait = max(0, $cooldown - $diff);
+        }
+
+        return view('auth.verify-reset-code', [
             'phone' => $phone,
+            'resend_wait' => $resendWait,
+            'cooldown' => $cooldown,
         ]);
     }
 
     /**
      * Reset password
      */
-    public function resetPassword(Request $request): RedirectResponse
+    public function verifyResetCode(Request $request): RedirectResponse
     {
         $request->validate([
             'code' => 'required|string|size:6',
-            'password' => 'required|min:6|confirmed',
         ], [
             'code.required' => 'Reset code is required.',
             'code.size' => 'Reset code must be 6 digits.',
-            'password.min' => 'Password must be at least 6 characters.',
-            'password.confirmed' => 'Password confirmation does not match.',
         ]);
 
         try {
@@ -154,18 +225,75 @@ class PasswordResetController extends Controller
                 return back()->withErrors(['code' => 'Invalid or expired reset code.']);
             }
 
-            // Update user password
+            // Mark session as verified and proceed to reset form
+            $request->session()->put('reset_verified', true);
+            return redirect()->route('password.reset')->with('status', 'Code verified. Set your new password.');
+
+        } catch (\Exception $e) {
+            Log::error('Password reset verification failed', [
+                'phone' => $phone ?? 'unknown',
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors(['code' => 'Unable to verify code. Please try again.']);
+        }
+    }
+
+    public function showResetPassword(Request $request)
+    {
+        $phone = $request->session()->get('reset_phone');
+        $expires = $request->session()->get('reset_expires');
+        $verified = (bool) $request->session()->get('reset_verified');
+
+        if (!$phone || !$expires || now()->greaterThan($expires)) {
+            return redirect()->route('password.forgot')->withErrors(['phone' => 'Reset session expired. Please request a new code.']);
+        }
+        if (!$verified) {
+            return redirect()->route('password.verify');
+        }
+
+        return view('auth.reset-password');
+    }
+
+    public function resetPassword(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'password' => 'required|min:6|confirmed',
+        ], [
+            'password.min' => 'Password must be at least 6 characters.',
+            'password.confirmed' => 'Password confirmation does not match.',
+        ]);
+
+        try {
+            $phone = $request->session()->get('reset_phone');
+            $expires = $request->session()->get('reset_expires');
+            $verified = (bool) $request->session()->get('reset_verified');
+
+            if (!$phone || !$expires || now()->greaterThan($expires)) {
+                return redirect()->route('password.forgot')->withErrors(['phone' => 'Reset session expired. Please request a new code.']);
+            }
+            if (!$verified) {
+                return redirect()->route('password.verify');
+            }
+
+            // Get user
+            $user = User::where('phone', $phone)->first();
+            if (!$user) {
+                return redirect()->route('password.forgot')->withErrors(['phone' => 'User not found.']);
+            }
+
+            // Update password
             $user->update([
                 'password' => Hash::make($request->password),
             ]);
 
-            // Delete used reset code
+            // Delete used reset token
             DB::table('password_resets')->where('email', $user->email)->delete();
 
             // Clear session
-            $request->session()->forget(['reset_phone', 'reset_expires']);
+            $request->session()->forget(['reset_phone', 'reset_expires', 'reset_verified']);
 
-            // Send password reset success notification
+            // Send success notification
             $this->notificationService->dispatchUserNotification(
                 'auth.password.reset.success',
                 $user,
@@ -174,7 +302,7 @@ class PasswordResetController extends Controller
                     'message' => 'Your password has been successfully reset. You can now login with your new password.',
                     'reset_at' => now()->toISOString(),
                 ],
-                ['sms', 'push'] // Send via SMS and push (no email since it's not real)
+                ['sms', 'push']
             );
 
             Log::info('Password reset successful', [
