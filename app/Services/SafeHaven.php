@@ -74,7 +74,8 @@ class SafeHaven
         if (!empty($clientHeader)) {
             $headers['ClientID'] = $clientHeader;
         }
-        $http = Http::acceptJson();
+        // Configure base client with retries and sane timeouts
+        $http = Http::acceptJson()->retry(2, 500)->timeout(30)->connectTimeout(15);
         // Prefer a custom CA bundle if provided (Windows may need this explicitly)
         $caBundle = env('SAFEHAVEN_CA_BUNDLE');
         if (!empty($caBundle)) {
@@ -94,6 +95,7 @@ class SafeHaven
     }
 
     /**
+{{ ... }}
      * Obtain OAuth2 access token using client_credentials + client_assertion.
      */
     protected function getAccessToken(): ?string
@@ -122,7 +124,8 @@ class SafeHaven
             }
 
             // Build HTTP client for token request, honoring custom CA bundle
-            $http = Http::asForm();
+            // Token request client with retries and timeouts
+            $http = Http::asForm()->retry(2, 500)->timeout(20)->connectTimeout(10);
             $caBundle = env('SAFEHAVEN_CA_BUNDLE');
             if (!empty($caBundle)) {
                 $candidate = $caBundle;
@@ -543,12 +546,17 @@ class SafeHaven
             ]);
             $json = $resp->json();
             $status = 'pending';
-            if (($json['status'] ?? null) == 200) {
-                $code = strtolower((string)($json['data']['status'] ?? ''));
-                if (in_array($code, ['success', 'completed', 'approved'])) {
+            // Prefer explicit body codes
+            $statusCode = $json['statusCode'] ?? ($json['status'] ?? null);
+            $respCode = $json['responseCode'] ?? ($json['data']['responseCode'] ?? null);
+            $dataStatus = strtolower((string)($json['data']['status'] ?? ''));
+            if ($statusCode == 200 || $respCode === '00') {
+                if (in_array($dataStatus, ['success','completed','approved'], true)) {
                     $status = 'success';
-                } elseif (in_array($code, ['failed', 'rejected'])) {
+                } elseif (in_array($dataStatus, ['failed','rejected'], true)) {
                     $status = 'failed';
+                } else {
+                    $status = 'pending';
                 }
             }
             return [

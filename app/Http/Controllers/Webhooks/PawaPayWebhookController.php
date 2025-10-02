@@ -34,15 +34,25 @@ class PawaPayWebhookController extends Controller
             return response()->json(['ok' => true, 'duplicate' => true]);
         }
 
-        // Process synchronously in dev/local to avoid pending state without a running worker
-        $sync = filter_var(env('WEBHOOKS_SYNC', true), FILTER_VALIDATE_BOOL);
+        // Process synchronously only if explicitly enabled; default to async for reliability
+        $sync = filter_var(env('WEBHOOKS_SYNC', false), FILTER_VALIDATE_BOOL);
+        $queue = env('NOTIFICATION_QUEUE_NAME', 'notifications');
+        $connection = env('NOTIFICATION_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database'));
         if ($sync) {
+            // Even when sync, keep consistent queue context for visibility
             \App\Jobs\ProcessPawaPayDeposit::dispatchSync($event->id, $payload);
             return response()->json(['ok' => true, 'processed' => 'sync']);
         }
-        // Otherwise, dispatch to queue
-        dispatch(new \App\Jobs\ProcessPawaPayDeposit($event->id, $payload));
-        return response()->json(['ok' => true, 'queued' => true]);
+        // Otherwise, dispatch to the notifications queue (same one your worker listens on)
+        \Log::info('Dispatching ProcessPawaPayDeposit', [
+            'event_id' => $event->id,
+            'queue' => $queue,
+            'connection' => $connection,
+        ]);
+        \App\Jobs\ProcessPawaPayDeposit::dispatch($event->id, $payload)
+            ->onConnection($connection)
+            ->onQueue($queue);
+        return response()->json(['ok' => true, 'queued' => $queue, 'connection' => $connection]);
     }
 
     protected function handleCompletedPayment($transfer, &$timeline, $safeHaven)

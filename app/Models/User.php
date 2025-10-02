@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
+use App\Services\PhoneNumberService;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -204,6 +205,66 @@ class User extends Authenticatable implements FilamentUser
             'daily_utilization' => $limits->getDailyUtilizationPercentage($dailyUsage['amount']),
             'monthly_utilization' => $limits->getMonthlyUtilizationPercentage($monthlyUsage['total_amount'])
         ];
+    }
+
+    /**
+     * Get the user's notifications
+     */
+    public function notifications()
+    {
+        return $this->hasMany(UserNotification::class);
+    }
+
+    /**
+     * Get the user's notification preferences
+     */
+    public function notificationPreferences()
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
+    /**
+     * Get the user's unread notifications
+     */
+    public function unreadNotifications()
+    {
+        return $this->notifications()->unread();
+    }
+
+    /**
+     * Get the user's read notifications
+     */
+    public function readNotifications()
+    {
+        return $this->notifications()->read();
+    }
+
+    /**
+     * Get the user's devices
+     */
+    public function devices()
+    {
+        return $this->hasMany(UserDevice::class);
+    }
+
+    /**
+     * Get the user's active devices
+     */
+    public function activeDevices()
+    {
+        return $this->devices()->where('is_active', true);
+    }
+
+    /**
+     * Normalize phone number on assignment (stored as 2376XXXXXXXX without +)
+     */
+    public function setPhoneAttribute($value): void
+    {
+        if (is_null($value) || $value === '') {
+            $this->attributes['phone'] = null;
+            return;
+        }
+        $this->attributes['phone'] = PhoneNumberService::normalize((string) $value);
     }
 
     /**

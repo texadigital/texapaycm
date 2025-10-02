@@ -13,7 +13,7 @@ class RefundServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(RefundService::class, function ($app) {
-            return new RefundService();
+            return new RefundService($app->make(\App\Services\NotificationService::class));
         });
     }
 

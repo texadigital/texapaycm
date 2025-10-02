@@ -2,7 +2,7 @@
   "info": {
     "name": "TexaPay Mobile API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status:\n   - Use the \"Transfers - Timeline\" request with the returned transferId\n\nNote: Make sure to log in first to establish a session."
+    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status & Payout:\n   - Use \"Transfers - Payin Status\" to poll the pay-in\n   - Then use \"Transfers - Payout\" and \"Transfers - Payout Status\" as needed\n\n5. Receipts:\n   - Use \"Transfers - Receipt URL\" (HTML shared link)\n   - Use \"Transfers - Receipt PDF\" to get a signed PDF URL\n   - Use \"Transfers - Share URL\" to generate a public signed link\n\nNote: Make sure to log in first to establish a session."
   },
   "item": [
     {
@@ -11,6 +11,38 @@
         "method": "GET",
         "header": [{ "key": "Accept", "value": "application/json" }],
         "url": { "raw": "{{baseUrl}}/api/mobile/feature", "host": ["{{baseUrl}}"], "path": ["api","mobile","feature"] }
+      }
+    },
+    {
+      "name": "Health - PawaPay",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/pawapay", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","pawapay"] }
+      }
+    },
+    {
+      "name": "Health - SafeHaven",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven"] }
+      }
+    },
+    {
+      "name": "Health - SafeHaven Banks",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven","banks"] }
+      }
+    },
+    {
+      "name": "Health - OpenExchangeRates",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/oxr", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","oxr"] }
       }
     },
     {
@@ -24,9 +56,9 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "phone", "value": "237650000001" },
-            { "key": "password", "value": "Passw0rd!" },
-            { "key": "pin", "value": "1234" }
+            { "key": "phone", "value": "{{loginPhone}}" },
+            { "key": "password", "value": "{{loginPassword}}" },
+            { "key": "pin", "value": "4248" }
           ]
         },
         "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","login"] }
@@ -84,7 +116,7 @@
           { "key": "Accept", "value": "application/json" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"accountNumber\": \"0119215210\"\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Sandbox Bank\"\n}" },
         "url": { "raw": "{{baseUrl}}/api/mobile/banks/suggest", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","suggest"] }
       }
     },
@@ -187,6 +219,131 @@
         "method": "GET",
         "header": [{ "key": "Accept", "value": "application/json" }],
         "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt-url"] }
+      }
+    },
+    {
+      "name": "Transfers - Payin Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payin/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payin","status"] }
+      }
+    },
+    {
+      "name": "Transfers - Payout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout"] }
+      }
+    },
+    {
+      "name": "Transfers - Payout Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout","status"] }
+      }
+    },
+    {
+      "name": "Transfers - Receipt PDF",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt.pdf", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt.pdf"] }
+      }
+    },
+    {
+      "name": "Transfers - Share URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/share-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","share-url"] }
+      }
+    },
+    {
+      "name": "Notifications - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications"] }
+      }
+    },
+    {
+      "name": "Notifications - Summary",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/summary", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","summary"] }
+      }
+    },
+    {
+      "name": "Notifications - Mark All Read",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","read-all"] }
+      }
+    },
+    {
+      "name": "Devices - Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"platform\": \"web\",\n  \"token\": \"TEST_TOKEN_ABC\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","register"] }
+      }
+    },
+    {
+      "name": "Devices - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices"] }
+      }
+    },
+    {
+      "name": "Devices - Test Push",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/test-push", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","test-push"] }
+      }
+    },
+    {
+      "name": "Devices - Unregister",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/unregister", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","unregister"] }
       }
     },
     {
@@ -385,8 +542,10 @@
     { "key": "quoteRef", "value": "" },
     { "key": "bankCode", "value": "999240" },
     { "key": "accountNumber", "value": "0119215210" },
-    { "key": "msisdn", "value": "237653456789" },
+    { "key": "msisdn", "value": "237693456789" },
     { "key": "pin", "value": "1234" },
-    { "key": "transferId", "value": "" }
+    { "key": "transferId", "value": "" },
+    { "key": "loginPhone", "value": "237674226623" },
+    { "key": "loginPassword", "value": "Ayuk.texa1" }
   ]
 }

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Transfer;
 use App\Models\WebhookEvent;
 use App\Services\SafeHaven;
+use App\Services\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -23,7 +24,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
 
     public function __construct(private int $eventId, private array $payload) {}
 
-    public function handle(SafeHaven $safeHaven): void
+    public function handle(SafeHaven $safeHaven, NotificationService $notificationService): void
     {
         $event = WebhookEvent::find($this->eventId);
         if (!$event) { return; }
@@ -35,7 +36,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
         $reference = $payload['reference'] ?? null;
         if (!$depositId) { return; }
 
-        DB::transaction(function () use ($depositId, $status, $reference, $payload, $safeHaven, $event) {
+        DB::transaction(function () use ($depositId, $status, $reference, $payload, $safeHaven, $event, $notificationService) {
             $transfer = Transfer::where('payin_ref', $depositId)->lockForUpdate()->first();
             if (!$transfer) {
                 Log::warning('Deposit webhook: transfer not found', ['depositId' => $depositId]);
@@ -53,17 +54,17 @@ class ProcessPawaPayDeposit implements ShouldQueue
 
             switch ($status) {
                 case 'COMPLETED':
-                    $this->handleCompletedPayment($transfer, $timeline, $safeHaven);
+                    $this->handleCompletedPayment($transfer, $timeline, $safeHaven, $notificationService);
                     break;
                 case 'FAILED':
                 case 'REJECTED':
                 case 'EXPIRED':
                 case 'CANCELLED':
-                    $this->handleFailedPayment($transfer, $timeline, $payload);
+                    $this->handleFailedPayment($transfer, $timeline, $payload, $notificationService);
                     break;
                 case 'PENDING':
                 case 'SUBMITTED':
-                    $this->handlePendingPayment($transfer, $timeline);
+                    $this->handlePendingPayment($transfer, $timeline, $notificationService);
                     break;
                 default:
                     Log::warning('Deposit webhook: Unknown status', ['status' => $status, 'transfer_id' => $transfer->id]);
@@ -80,7 +81,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
         });
     }
 
-    protected function handleCompletedPayment(Transfer $transfer, array &$timeline, SafeHaven $safeHaven): void
+    protected function handleCompletedPayment(Transfer $transfer, array &$timeline, SafeHaven $safeHaven, NotificationService $notificationService): void
     {
         if (in_array($transfer->status, ['payout_pending', 'completed', 'payout_success'])) {
             Log::info('Payment already processed', ['transfer_id' => $transfer->id, 'current_status' => $transfer->status]);
@@ -100,10 +101,15 @@ class ProcessPawaPayDeposit implements ShouldQueue
             'timeline' => $timeline,
         ]);
 
-        $this->initiatePayout($transfer, $timeline, $safeHaven);
+        // Send pay-in success notification
+        $notificationService->dispatchUserNotification('transfer.payin.success', $transfer->user, [
+            'transfer' => $transfer->toArray()
+        ]);
+
+        $this->initiatePayout($transfer, $timeline, $safeHaven, $notificationService);
     }
 
-    protected function handleFailedPayment(Transfer $transfer, array &$timeline, array $payload): void
+    protected function handleFailedPayment(Transfer $transfer, array &$timeline, array $payload, NotificationService $notificationService): void
     {
         $failureMap = [
             'PAYER_LIMIT_REACHED' => 'Payer reached provider limit. Try a lower amount or later.',
@@ -132,6 +138,14 @@ class ProcessPawaPayDeposit implements ShouldQueue
             'status' => 'failed',
             'timeline' => $timeline,
         ]);
+
+        // Send pay-in failed notification
+        $notificationService->dispatchUserNotification('transfer.payin.failed', $transfer->user, [
+            'transfer' => $transfer->toArray(),
+            'reason' => $reason,
+            'failure_code' => $failureCode ?: null
+        ]);
+
         Log::warning('Payment failed', [
             'transfer_id' => $transfer->id,
             'reason' => $reason,
@@ -141,7 +155,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
         ]);
     }
 
-    protected function handlePendingPayment(Transfer $transfer, array &$timeline): void
+    protected function handlePendingPayment(Transfer $transfer, array &$timeline, NotificationService $notificationService): void
     {
         $timeline[] = [
             'state' => 'payin_pending',
@@ -155,7 +169,7 @@ class ProcessPawaPayDeposit implements ShouldQueue
         ]);
     }
 
-    protected function initiatePayout(Transfer $transfer, array &$timeline, SafeHaven $safeHaven, \App\Services\RefundService $refundService = null): void
+    protected function initiatePayout(Transfer $transfer, array &$timeline, SafeHaven $safeHaven, NotificationService $notificationService, \App\Services\RefundService $refundService = null): void
     {
         try {
             if (empty($transfer->recipient_account_number) || empty($transfer->recipient_bank_code)) {
@@ -279,6 +293,12 @@ class ProcessPawaPayDeposit implements ShouldQueue
                     'status' => 'completed',
                     'timeline' => $timeline,
                 ]);
+
+                // Send payout success notification
+                $notificationService->dispatchUserNotification('transfer.payout.success', $transfer->user, [
+                    'transfer' => $transfer->toArray()
+                ]);
+
                 // Update transaction limits idempotently so dashboard usage stays in sync
                 try {
                     $limitCheck = app(\App\Services\LimitCheckService::class);
@@ -314,6 +334,13 @@ class ProcessPawaPayDeposit implements ShouldQueue
                     'status' => 'failed',
                     'timeline' => $timeline,
                 ]);
+
+                // Send payout failed notification
+                $notificationService->dispatchUserNotification('transfer.payout.failed', $transfer->user, [
+                    'transfer' => $transfer->toArray(),
+                    'reason' => $reason
+                ]);
+
                 Log::error('Payout failed', ['transfer_id' => $transfer->id, 'reason' => $reason, 'response' => $resp]);
 
                 // If payin succeeded but payout failed, initiate refund
@@ -345,7 +372,8 @@ class ProcessPawaPayDeposit implements ShouldQueue
                 'payout_status' => 'failed',
                 'timeline' => $timeline,
             ]);
-            throw $e;
+            // Do not rethrow here; webhook controller should still return 200.
+            return;
         }
     }
 }

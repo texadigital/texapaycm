@@ -4,6 +4,15 @@
 <div class="container py-4">
     <h1 class="h4 mb-3">Notification Preferences</h1>
 
+    @if (empty($user->notification_email))
+        <div class="alert alert-warning d-flex align-items-center justify-content-between">
+            <div>
+                <strong>Action recommended:</strong> Add a notification email so you can receive email notifications. You can set a dedicated email address different from your login email.
+            </div>
+            <a href="{{ route('profile.personal') }}" class="btn btn-sm btn-outline-primary ms-3">Set notification email</a>
+        </div>
+    @endif
+
     @if (session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
