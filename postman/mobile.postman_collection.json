@@ -14,6 +14,38 @@
       }
     },
     {
+      "name": "Health - PawaPay",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/pawapay", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","pawapay"] }
+      }
+    },
+    {
+      "name": "Health - SafeHaven",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven"] }
+      }
+    },
+    {
+      "name": "Health - SafeHaven Banks",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven","banks"] }
+      }
+    },
+    {
+      "name": "Health - OpenExchangeRates",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/health/oxr", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","oxr"] }
+      }
+    },
+    {
       "name": "Auth - Login (form)",
       "request": {
         "method": "POST",
@@ -84,7 +116,7 @@
           { "key": "Accept", "value": "application/json" },
           { "key": "Content-Type", "value": "application/json" }
         ],
-        "body": { "mode": "raw", "raw": "{\n  \"accountNumber\": \"0119215210\"\n}" },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Sandbox Bank\"\n}" },
         "url": { "raw": "{{baseUrl}}/api/mobile/banks/suggest", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","suggest"] }
       }
     },
@@ -243,6 +275,75 @@
         ],
         "body": { "mode": "raw", "raw": "{}" },
         "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/share-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","share-url"] }
+      }
+    },
+    {
+      "name": "Notifications - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications"] }
+      }
+    },
+    {
+      "name": "Notifications - Summary",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/summary", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","summary"] }
+      }
+    },
+    {
+      "name": "Notifications - Mark All Read",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","read-all"] }
+      }
+    },
+    {
+      "name": "Devices - Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"platform\": \"web\",\n  \"token\": \"TEST_TOKEN_ABC\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","register"] }
+      }
+    },
+    {
+      "name": "Devices - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices"] }
+      }
+    },
+    {
+      "name": "Devices - Test Push",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/test-push", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","test-push"] }
+      }
+    },
+    {
+      "name": "Devices - Unregister",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/devices/unregister", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","unregister"] }
       }
     },
     {
