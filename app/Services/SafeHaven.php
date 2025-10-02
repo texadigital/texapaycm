@@ -546,12 +546,17 @@ class SafeHaven
             ]);
             $json = $resp->json();
             $status = 'pending';
-            if (($json['status'] ?? null) == 200) {
-                $code = strtolower((string)($json['data']['status'] ?? ''));
-                if (in_array($code, ['success', 'completed', 'approved'])) {
+            // Prefer explicit body codes
+            $statusCode = $json['statusCode'] ?? ($json['status'] ?? null);
+            $respCode = $json['responseCode'] ?? ($json['data']['responseCode'] ?? null);
+            $dataStatus = strtolower((string)($json['data']['status'] ?? ''));
+            if ($statusCode == 200 || $respCode === '00') {
+                if (in_array($dataStatus, ['success','completed','approved'], true)) {
                     $status = 'success';
-                } elseif (in_array($code, ['failed', 'rejected'])) {
+                } elseif (in_array($dataStatus, ['failed','rejected'], true)) {
                     $status = 'failed';
+                } else {
+                    $status = 'pending';
                 }
             }
             return [

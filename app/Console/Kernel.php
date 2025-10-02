@@ -49,6 +49,11 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/reconcile-transfers.log'));
+
+        // Optional: targeted payout status debug sweep (disabled by default)
+        // $schedule->command('texapay:debug-payout --id=24 --apply')
+        //     ->everyTenMinutes()
+        //     ->runInBackground();
             
         // Log that the scheduler is running
         $schedule->call(function () {
