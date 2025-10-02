@@ -2,7 +2,7 @@
   "info": {
     "name": "TexaPay Mobile API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status:\n   - Use the \"Transfers - Timeline\" request with the returned transferId\n\nNote: Make sure to log in first to establish a session."
+    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status & Payout:\n   - Use \"Transfers - Payin Status\" to poll the pay-in\n   - Then use \"Transfers - Payout\" and \"Transfers - Payout Status\" as needed\n\n5. Receipts:\n   - Use \"Transfers - Receipt URL\" (HTML shared link)\n   - Use \"Transfers - Receipt PDF\" to get a signed PDF URL\n   - Use \"Transfers - Share URL\" to generate a public signed link\n\nNote: Make sure to log in first to establish a session."
   },
   "item": [
     {
@@ -24,9 +24,9 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "phone", "value": "237650000001" },
-            { "key": "password", "value": "Passw0rd!" },
-            { "key": "pin", "value": "1234" }
+            { "key": "phone", "value": "{{loginPhone}}" },
+            { "key": "password", "value": "{{loginPassword}}" },
+            { "key": "pin", "value": "4248" }
           ]
         },
         "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","login"] }
@@ -187,6 +187,62 @@
         "method": "GET",
         "header": [{ "key": "Accept", "value": "application/json" }],
         "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt-url"] }
+      }
+    },
+    {
+      "name": "Transfers - Payin Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payin/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payin","status"] }
+      }
+    },
+    {
+      "name": "Transfers - Payout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout"] }
+      }
+    },
+    {
+      "name": "Transfers - Payout Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout","status"] }
+      }
+    },
+    {
+      "name": "Transfers - Receipt PDF",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt.pdf", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt.pdf"] }
+      }
+    },
+    {
+      "name": "Transfers - Share URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/share-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","share-url"] }
       }
     },
     {
@@ -385,8 +441,10 @@
     { "key": "quoteRef", "value": "" },
     { "key": "bankCode", "value": "999240" },
     { "key": "accountNumber", "value": "0119215210" },
-    { "key": "msisdn", "value": "237653456789" },
+    { "key": "msisdn", "value": "237693456789" },
     { "key": "pin", "value": "1234" },
-    { "key": "transferId", "value": "" }
+    { "key": "transferId", "value": "" },
+    { "key": "loginPhone", "value": "237674226623" },
+    { "key": "loginPassword", "value": "Ayuk.texa1" }
   ]
 }
