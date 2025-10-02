@@ -13,6 +13,30 @@
   - CSRF is explicitly disabled on several POST endpoints for the mobile API. `auth` middleware protects authenticated routes using session cookies.
   - No Sanctum wiring is present yet. We will add Sanctum for PWA to avoid relying on disabling CSRF for browser clients.
 
+### UI/UX References (visual samples only)
+- Source directory: `/Users/macbookpro/Downloads/TEXA (3)/`
+- Purpose: Use as visual/style guides (layout, empty/error states, flows).
+  Do not imply new backend features beyond discovered APIs.
+
+- Auth screens (map to PWA `/auth/*`):
+  - `Create account/Login.png`, `Login-1.png`..`Login-4.png`
+  - `Create account.png`, `Create account - verification.png`
+- Dashboard and states (map to `/dashboard` + list empty states):
+  - `Active state.png`, `Empty State.png`, `Error state.png`, `Error state-1.png`, `Error state-2.png`
+- Transfers flow visuals (map to quote/confirm/pay-in/payout pages):
+  - Use as styling analogs: `Add Money.png`, `Add Money-1.png`, `Add Money-2.png`
+  - Also use generic payment visuals: `Electricity*.png`, `Data*.png`, `Airtime*.png`
+  - Note: These are styling cues only; backend supports bank transfer flow as in API.
+- Security & limits (map to `/profile/security` and limits UI hints):
+  - `Enter PIN.png`, `Account Limit.png`
+- Feedback & system UI:
+  - `Airtime success.png`, `Airtime confirmation.png`, `Error messagebfor profile.png`
+- Misc components (style references):
+  - `Chat Bot.png`, frames like `Frame 1618869***.png` for cards, lists, spacing.
+
+We will align typography, spacing, card styles, and states with these samples
+while binding interactions strictly to the discovered API routes.
+
 References:
 - `routes/api.php`
 - Controllers under `app/Http/Controllers/Api/` and shared controllers (e.g., `NotificationController`, `BankController`, `Kyc/*`).
