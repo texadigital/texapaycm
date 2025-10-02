@@ -31,3 +31,16 @@ Thumbs.db
 .env.testing
 .env.staging
 .env
+
+# Additional environment/secret files
+.env.*
+asw.md
+
+# Local databases
+database/*.sqlite
+database/*.sqlite3
+
+# Private keys / certs
+*.pem
+*.key
+storage/certs/*
