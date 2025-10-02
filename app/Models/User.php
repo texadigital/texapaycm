@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Notifications\Notifiable;
+use App\Services\PhoneNumberService;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -252,6 +253,18 @@ class User extends Authenticatable implements FilamentUser
     public function activeDevices()
     {
         return $this->devices()->where('is_active', true);
+    }
+
+    /**
+     * Normalize phone number on assignment (stored as 2376XXXXXXXX without +)
+     */
+    public function setPhoneAttribute($value): void
+    {
+        if (is_null($value) || $value === '') {
+            $this->attributes['phone'] = null;
+            return;
+        }
+        $this->attributes['phone'] = PhoneNumberService::normalize((string) $value);
     }
 
     /**

@@ -213,7 +213,9 @@ class PawaPay
                 ],
             ];
             if (!empty($payload['client_ref'])) {
-                $body['clientReferenceId'] = (string) $payload['client_ref'];
+                $ref = (string) $payload['client_ref'];
+                // PawaPay v2 rejects 'clientReference' as unsupported; send only 'clientReferenceId'.
+                $body['clientReferenceId'] = $ref;
             }
             if (!empty($payload['customer_message'])) {
                 $msg = trim((string) $payload['customer_message']);
@@ -222,6 +224,15 @@ class PawaPay
                 $body['customerMessage'] = $msg;
             }
             // Note: v2 API does NOT accept per-request callbackUrl; callbacks are configured in Dashboard.
+
+            // Lightweight debug for outgoing body (omit full phone)
+            \Log::info('PawaPay initiate deposit', [
+                'provider' => $provider,
+                'depositId' => $depositId,
+                'client_ref_present' => !empty($payload['client_ref']),
+                'has_clientReferenceId' => array_key_exists('clientReferenceId', $body),
+                'has_clientReference' => array_key_exists('clientReference', $body),
+            ]);
 
             $resp = $this->client()->post($this->path('/deposits'), $body);
 

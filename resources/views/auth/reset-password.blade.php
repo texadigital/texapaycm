@@ -25,20 +25,7 @@
         <form class="mt-8 space-y-6" action="{{ route('password.update') }}" method="POST">
             @csrf
 
-            <div>
-                <label for="code" class="block text-sm font-medium text-gray-700">
-                    Reset Code
-                </label>
-                <div class="mt-1">
-                    <input id="code" name="code" type="text" maxlength="6" required
-                           class="appearance-none rounded-md relative block w-full px-3 py-2 border @error('code') border-red-300 @else border-gray-300 @enderror placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm text-center text-lg tracking-widest"
-                           placeholder="000000">
-                </div>
-                @error('code')
-                    <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                @enderror
-                <p class="mt-1 text-xs text-gray-500">Enter the 6-digit code sent to {{ $phone ?? 'your phone' }}</p>
-            </div>
+            {{-- OTP code removed: verification happens on the previous step --}}
 
             <div>
                 <label for="password" class="block text-sm font-medium text-gray-700">

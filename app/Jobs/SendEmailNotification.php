@@ -37,22 +37,25 @@ class SendEmailNotification implements ShouldQueue
                 return;
             }
 
-            // Check if user has a valid email address
-            if (!$user->email || $user->email === $user->phone . '@local') {
+            // Prefer notification_email, fallback to email
+            $toEmail = $user->notification_email ?: $user->email;
+
+            // Check if user has a valid destination email address
+            if (!$toEmail || $toEmail === $user->phone . '@local') {
                 Log::warning('No valid email address for user', [
                     'user_id' => $user->id,
-                    'email' => $user->email
+                    'email' => $toEmail
                 ]);
                 return;
             }
 
             // Send the email
-            Mail::to($user->email)->send(new UserNotificationMail($this->notification));
+            Mail::to($toEmail)->send(new UserNotificationMail($this->notification));
 
             Log::info('Email notification sent successfully', [
                 'user_id' => $user->id,
                 'notification_id' => $this->notification->id,
-                'email' => $user->email
+                'email' => $toEmail
             ]);
 
         } catch (\Exception $e) {

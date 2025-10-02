@@ -28,8 +28,16 @@ class PawaPayRefundWebhookController extends Controller
         if ($event->processed_at) {
             return response()->json(['ok' => true, 'duplicate' => true]);
         }
-
-        dispatch(new \App\Jobs\ProcessPawaPayRefund($event->id, $payload));
-        return response()->json(['ok' => true]);
+        $queue = env('NOTIFICATION_QUEUE_NAME', 'notifications');
+        $connection = env('NOTIFICATION_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database'));
+        Log::info('Dispatching ProcessPawaPayRefund', [
+            'event_id' => $event->id,
+            'queue' => $queue,
+            'connection' => $connection,
+        ]);
+        \App\Jobs\ProcessPawaPayRefund::dispatch($event->id, $payload)
+            ->onConnection($connection)
+            ->onQueue($queue);
+        return response()->json(['ok' => true, 'queued' => $queue, 'connection' => $connection]);
     }
 }

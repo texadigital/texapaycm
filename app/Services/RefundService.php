@@ -66,35 +66,35 @@ class RefundService
             ]);
 
             // Get the original deposit (pay-in) reference from the transfer
-            $depositId = (string) $transfer->payin_ref; // original pay-in reference
+            $depositId = (string) $transfer->payin_ref;
             
-            // Build the webhook URL using the base URL from config
+            // Callbacks are configured in PawaPay dashboard; do not include callbackUrl in body per docs
             $webhookBase = config('services.pawapay.webhook_base_url');
-            $callbackUrl = "{$webhookBase}/api/v1/webhooks/pawapay/refunds";
+            $callbackUrl = null; // kept for reference, not sent
             
-            // Prepare the refund payload per pawaPay docs
-            // For full refund: send only refundId + depositId (no amount/currency)
-            // Compose metadata as non-empty strings per provider requirements
-            $metadata = [
-                'reason' => 'Automatic refund for failed payout',
-                'transfer_id' => (string) $transfer->id,
-                'original_payout_ref' => (string) ($transfer->payout_ref ?? ''),
-                'original_payin_ref' => (string) $depositId,
-            ];
-            // Payload to provider
+            // Prepare the refund payload per PawaPay API reference
+            // API requires amount and currency; for XAF, send integer units as string.
+            $amountUnits = (int) floor((float) $transfer->amount_xaf);
+            if ($amountUnits <= 0 && $transfer->amount_xaf > 0) {
+                $amountUnits = (int) ceil((float) $transfer->amount_xaf);
+            }
+            // Compose metadata as an array of objects with arbitrary keys (per API reference examples)
+            $metaList = [];
+            $metaList[] = ['reason' => 'Automatic refund for failed payout'];
+            $metaList[] = ['transferId' => (string) $transfer->id];
+            $metaList[] = ['originalPayinRef' => (string) $depositId];
+            if (!empty($transfer->payout_ref)) {
+                $metaList[] = ['originalPayoutRef' => (string) $transfer->payout_ref];
+            }
+
+            // Primary payload (full refund for original amount)
             $payload = [
                 'refundId' => (string) $refundId,
                 'depositId' => (string) $depositId,
-                'callbackUrl' => (string) $callbackUrl,
-                'metadata' => $metadata,
+                'amount' => (string) $amountUnits,
+                'currency' => 'XAF',
+                'metadata' => $metaList,
             ];
-            // If business rules require partial refund, include amount and currency.
-            // Note: PawaPay expects amounts in UNITS (integer for XAF), formatted as string.
-            $partialMinor = null; // keep null for full refund
-            if ($partialMinor !== null) {
-                $payload['amount'] = (string) (int) $partialMinor; // XAF units
-                $payload['currency'] = 'XAF';
-            }
 
             // Validate API key early
             if (!$this->apiKey) {
@@ -121,8 +121,14 @@ class RefundService
             // Make the API request to initiate refund (log outgoing payload for diagnostics)
             $http = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
+                // Include X-API-KEY in case endpoint prefers it
+                'X-API-KEY' => $this->apiKey,
+                'X-Api-Key' => $this->apiKey,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json'
+            ])->retry(2, 500)->withOptions([
+                // Ensure non-2xx responses do NOT throw exceptions so we can inspect and fall back
+                'http_errors' => false,
             ]);
             if ($this->caBundle) {
                 $http = $http->withOptions([
@@ -138,6 +144,12 @@ class RefundService
             $response = $http->post("{$this->baseUrl}/refunds", $payload);
 
             $responseData = $response->json();
+            if (!is_array($responseData)) {
+                // Defensive: try to decode manually or capture raw body for logging/fallback checks
+                $raw = (string) $response->body();
+                $decoded = json_decode($raw, true);
+                $responseData = is_array($decoded) ? $decoded : ['raw' => $raw];
+            }
             Log::info('Refund response received', [
                 'status' => $response->status(),
                 'body' => $responseData,
@@ -178,6 +190,97 @@ class RefundService
                     'refund_id' => $refundId,
                     'data' => $responseData
                 ];
+            }
+
+            // If provider claims missing metadata, perform two-stage fallbacks
+            $missingMeta = strtoupper((string)($responseData['failureReason']['failureCode'] ?? '')) === 'MISSING_PARAMETER'
+                && str_contains(strtoupper((string)($responseData['failureReason']['failureMessage'] ?? '')), 'METADATA');
+            if ($response->status() === 400 && $missingMeta) {
+                // Attempt 2: minimal metadata as empty object
+                $alt1 = [
+                    'refundId' => (string) $refundId,
+                    'depositId' => (string) $depositId,
+                    'amount' => (string) $amountUnits,
+                    'currency' => 'XAF',
+                    'metadata' => [],
+                ];
+                Log::warning('Refund API requested metadata; retrying with empty object', ['refund_id' => $refundId]);
+                $response = $http->post("{$this->baseUrl}/refunds", $alt1);
+                $responseData = $response->json();
+                if (!is_array($responseData)) {
+                    $raw = (string) $response->body();
+                    $decoded = json_decode($raw, true);
+                    $responseData = is_array($decoded) ? $decoded : ['raw' => $raw];
+                }
+                if ($response->successful() && in_array(($responseData['status'] ?? ''), ['ACCEPTED','PENDING'], true)) {
+                    $timeline[] = [
+                        'state' => 'refund_initiated',
+                        'at' => now()->toIso8601String(),
+                        'refund_id' => $refundId,
+                        'status' => $responseData['status'] ?? null,
+                    ];
+                    Log::info('Refund initiated successfully (empty metadata)', [
+                        'transfer_id' => $transfer->id,
+                        'refund_id' => $refundId,
+                        'response' => $responseData
+                    ]);
+                    $transfer->timeline = $timeline;
+                    $transfer->save();
+                    $this->notificationService->dispatchUserNotification('transfer.refund.initiated', $transfer->user, [
+                        'transfer' => $transfer->toArray(),
+                        'refund_id' => $refundId
+                    ]);
+                    return [
+                        'success' => true,
+                        'message' => 'Refund initiated successfully',
+                        'refund_id' => $refundId,
+                        'data' => $responseData
+                    ];
+                }
+
+                // Attempt 3: list-of-pairs metadata
+                $kv = [];
+                foreach ($metaList as $obj) {
+                    foreach ($obj as $k => $v) {
+                        $kv[] = ['key' => (string) $k, 'value' => (string) $v];
+                    }
+                }
+                $alt2 = [
+                    'refundId' => (string) $refundId,
+                    'depositId' => (string) $depositId,
+                    'amount' => (string) $amountUnits,
+                    'currency' => 'XAF',
+                    'metadata' => $kv,
+                ];
+                $alt2['metaData'] = $kv;
+                Log::warning('Refund API still rejected; retrying with list-of-pairs metadata', ['refund_id' => $refundId]);
+                $response = $http->post("{$this->baseUrl}/refunds", $alt2);
+                $responseData = $response->json();
+                if ($response->successful() && in_array(($responseData['status'] ?? ''), ['ACCEPTED','PENDING'], true)) {
+                    $timeline[] = [
+                        'state' => 'refund_initiated',
+                        'at' => now()->toIso8601String(),
+                        'refund_id' => $refundId,
+                        'status' => $responseData['status'] ?? null,
+                    ];
+                    Log::info('Refund initiated successfully (fallback payload)', [
+                        'transfer_id' => $transfer->id,
+                        'refund_id' => $refundId,
+                        'response' => $responseData
+                    ]);
+                    $transfer->timeline = $timeline;
+                    $transfer->save();
+                    $this->notificationService->dispatchUserNotification('transfer.refund.initiated', $transfer->user, [
+                        'transfer' => $transfer->toArray(),
+                        'refund_id' => $refundId
+                    ]);
+                    return [
+                        'success' => true,
+                        'message' => 'Refund initiated successfully',
+                        'refund_id' => $refundId,
+                        'data' => $responseData
+                    ];
+                }
             }
 
             // Handle API errors and append failure event

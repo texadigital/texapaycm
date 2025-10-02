@@ -372,7 +372,8 @@ class ProcessPawaPayDeposit implements ShouldQueue
                 'payout_status' => 'failed',
                 'timeline' => $timeline,
             ]);
-            throw $e;
+            // Do not rethrow here; webhook controller should still return 200.
+            return;
         }
     }
 }
