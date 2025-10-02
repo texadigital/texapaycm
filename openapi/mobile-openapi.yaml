@@ -1,3 +1,30 @@
+    NotificationItem:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        readAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    NotificationSummary:
+      type: object
+      properties:
+        total: { type: integer }
+        unread: { type: integer }
+    DeviceRegisterRequest:
+      type: object
+      required: [platform, token]
+      properties:
+        platform: { type: string, enum: [web, ios, android] }
+        token: { type: string }
+    Device:
+      type: object
+      properties:
+        id: { type: integer }
+        platform: { type: string }
+        token: { type: string }
+        createdAt: { type: string, format: date-time }
 openapi: 3.0.3
 info:
   title: TexaPay Mobile API
@@ -117,10 +144,31 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                accountNumber:
-                  type: string
+              $ref: '#/components/schemas/SuggestBankRequest'
+      responses:
+        '200':
+          description: OK
+  /api/mobile/health/pawapay:
+    get:
+      summary: Health probe for PawaPay integration
+      responses:
+        '200':
+          description: OK
+  /api/mobile/health/safehaven:
+    get:
+      summary: Health probe for SafeHaven integration
+      responses:
+        '200':
+          description: OK
+  /api/mobile/health/safehaven/banks:
+    get:
+      summary: List banks from SafeHaven for health check
+      responses:
+        '200':
+          description: OK
+  /api/mobile/health/oxr:
+    get:
+      summary: Health probe for OpenExchangeRates
       responses:
         '200':
           description: OK
@@ -192,6 +240,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error403'
+  /api/mobile/notifications:
+    get:
+      summary: List notifications for the signed-in user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/NotificationItem' }
+  /api/mobile/notifications/summary:
+    get:
+      summary: Notification summary counts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSummary'
+  /api/mobile/notifications/read-all:
+    put:
+      summary: Mark all notifications as read
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
+  /api/mobile/devices/register:
+    post:
+      summary: Register a device for push notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegisterRequest'
+      responses:
+        '200':
+          description: OK
+  /api/mobile/devices:
+    get:
+      summary: List registered devices
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Device' }
+  /api/mobile/devices/test-push:
+    post:
+      summary: Send a test push notification
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
+  /api/mobile/devices/unregister:
+    delete:
+      summary: Unregister current device token
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
         '400':
           description: Limits or validation error
           content:
@@ -309,6 +441,124 @@ paths:
                     type: boolean
                   url:
                     type: string
+  /api/mobile/transfers/{transfer}/receipt.pdf:
+    get:
+      summary: Get signed receipt PDF URL
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+  /api/mobile/transfers/{transfer}/share-url:
+    post:
+      summary: Create a signed share URL for receipt
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+  /api/mobile/transfers/{transfer}/payin/status:
+    post:
+      summary: Poll pay-in status
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status: { type: string }
+  /api/mobile/transfers/{transfer}/payout:
+    post:
+      summary: Initiate payout after successful pay-in
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  initiated: { type: boolean }
+  /api/mobile/transfers/{transfer}/payout/status:
+    post:
+      summary: Poll payout status
+      parameters:
+        - in: path
+          name: transfer
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status: { type: string }
   /api/mobile/dashboard:
     get:
       summary: Dashboard summary for the signed-in user
@@ -633,16 +883,12 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean }
-                  messages:
-                    type: array
-                    items: { $ref: '#/components/schemas/SupportMessage' }
 components:
   schemas:
-    Error401:
+    SuggestBankRequest:
       type: object
       properties:
-        success: { type: boolean, example: false }
-        code: { type: string, example: UNAUTHENTICATED }
+        name:
         message: { type: string, example: Authentication required }
     Error403:
       type: object
