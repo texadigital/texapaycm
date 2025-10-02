@@ -286,7 +286,8 @@ class PawaPay
             // Docs mention checking deposit status
             $resp = $this->client()->get($this->path('/deposits/' . urlencode($reference)));
             $json = $resp->json();
-            $statusRaw = strtoupper((string)($json['status'] ?? ''));
+            // PawaPay returns top-level status (e.g., FOUND) and actual deposit status under data.status
+            $statusRaw = strtoupper((string)($json['data']['status'] ?? $json['status'] ?? ''));
             $status = $this->normalizeStatus($statusRaw, $resp->status(), $resp->successful());
             if (isset($json['failureCode']) && !isset($json['message'])) {
                 $json['message'] = $this->failureMessage((string) $json['failureCode']);

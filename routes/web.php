@@ -111,6 +111,10 @@ Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebh
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
 
+// Also expose non-versioned public path used by env PAWAPAY_CALLBACK_URL
+Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
 // KYC: Smile ID webhook (public)
 Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
@@ -120,6 +124,11 @@ Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.refunds');
+
+// Payout webhook (optional, currently just logs and acknowledges)
+Route::post('/api/v1/webhooks/pawapay/payouts', [\App\Http\Controllers\Webhooks\PawaPayPayoutWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('webhooks.pawapay.payouts');
 
 // Public static pages
 Route::get('/policies', function () {

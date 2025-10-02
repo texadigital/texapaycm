@@ -502,6 +502,15 @@ class TransfersController extends Controller
             // lock the row
             $transfer = Transfer::lockForUpdate()->findOrFail($transfer->id);
 
+            // Precondition: only allow payout once pay-in is confirmed successful
+            if ($transfer->payin_status !== 'success') {
+                return response()->json([
+                    'status' => 'blocked',
+                    'message' => 'Payout cannot start until pay-in is successful.',
+                    'payin_status' => $transfer->payin_status,
+                ], 409);
+            }
+
             if ($transfer->payout_status === 'success') {
                 return response()->json([
                     'status' => 'already_processed',

@@ -509,6 +509,15 @@ class TransferController extends Controller
             $refundService = $refundService ?? app(RefundService::class);
             // Reload the transfer with a lock to prevent concurrent modifications
             $transfer = Transfer::lockForUpdate()->findOrFail($transfer->id);
+
+            // Precondition: only allow payout once pay-in is confirmed successful
+            if ($transfer->payin_status !== 'success') {
+                return $this->jsonOrRedirect($request, [
+                    'status' => 'blocked',
+                    'message' => 'Payout cannot start until pay-in is successful.',
+                    'payin_status' => $transfer->payin_status,
+                ], 409);
+            }
             
             // Check if payout was already successful
             if ($transfer->payout_status === 'success') {

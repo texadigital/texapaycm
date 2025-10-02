@@ -22,6 +22,8 @@ class Kernel extends ConsoleKernel
         Commands\ProcessPendingRefunds::class,
         Commands\TestRefund::class,
         Commands\TestRefundStatus::class,
+        Commands\ReconcileTransfers::class,
+        Commands\DebugPayinStatus::class,
     ];
 
     /**
@@ -40,6 +42,13 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/reconcile-payouts.log'));
+
+        // Reconcile transfers periodically (in addition to webhooks)
+        $schedule->command('texapay:reconcile-transfers --limit=100')
+            ->everyTwoMinutes()
+            ->withoutOverlapping()
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/reconcile-transfers.log'));
             
         // Log that the scheduler is running
         $schedule->call(function () {

@@ -30,3 +30,4 @@ Thumbs.db
 .env.development
 .env.testing
 .env.staging
+.env

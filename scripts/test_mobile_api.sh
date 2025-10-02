@@ -29,6 +29,8 @@ pretty() {
   fi
 }
 
+# No jq/python required: extract simple values with sed
+
 curl_json() {
   local method="$1"; shift
   local url="$1"; shift
@@ -90,7 +92,10 @@ echo_section "4) Transfers: Quote"
 quote_resp="$(curl_json POST "$BASE_URL/api/mobile/transfers/quote" \
   "{\"amountXaf\":$AMOUNT_XAF,\"bankCode\":\"$BANK_CODE\",\"accountNumber\":\"$ACCOUNT_NUMBER\"}")"
 echo "$quote_resp" | pretty
-quote_id="$(echo "$quote_resp" | json_get 'quote.id')"
+quote_id="$(echo "$quote_resp" | sed -n 's/.*"quote"[^{]*{[^}]*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)"
+if [[ -z "$quote_id" ]]; then
+  quote_id="$(echo "$quote_resp" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)"
+fi
 if [[ -z "$quote_id" ]]; then
   echo "ERROR: quote.id not returned" >&2
   exit 1
@@ -100,7 +105,10 @@ echo_section "4) Transfers: Confirm"
 confirm_resp="$(curl_json POST "$BASE_URL/api/mobile/transfers/confirm" \
   "{\"quoteId\":$quote_id,\"bankCode\":\"$BANK_CODE\",\"accountNumber\":\"$ACCOUNT_NUMBER\",\"msisdn\":\"$MSISDN\"}")"
 echo "$confirm_resp" | pretty
-transfer_id="$(echo "$confirm_resp" | json_get 'transfer.id')"
+transfer_id="$(echo "$confirm_resp" | sed -n 's/.*"transferId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
+if [[ -z "$transfer_id" ]]; then
+  transfer_id="$(echo "$confirm_resp" | sed -n 's/.*"transfer"[^{]*{[^}]*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)"
+fi
 if [[ -z "$transfer_id" ]]; then
   echo "ERROR: transfer id not returned after confirm" >&2
   exit 1
@@ -118,7 +126,7 @@ attempts=6
 for ((i=1; i<=attempts; i++)); do
   payin_resp="$(curl_json POST "$BASE_URL/api/mobile/transfers/$transfer_id/payin/status" '{}')"
   echo "$payin_resp" | pretty
-  status="$(echo "$payin_resp" | json_get 'status')"
+  status="$(echo "$payin_resp" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
   if [[ "$status" == "success" || "$status" == "failed" ]]; then
     break
   fi
@@ -134,7 +142,7 @@ echo_section "7) Payout Status Poll"
 for ((i=1; i<=attempts; i++)); do
   payout_status="$(curl_json POST "$BASE_URL/api/mobile/transfers/$transfer_id/payout/status" '{}' )"
   echo "$payout_status" | pretty
-  pstat="$(echo "$payout_status" | json_get 'status')"
+  pstat="$(echo "$payout_status" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
   if [[ "$pstat" == "success" || "$pstat" == "failed" ]]; then
     break
   fi
