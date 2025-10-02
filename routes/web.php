@@ -56,6 +56,14 @@ Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login'])->n
 Route::get('/login/pin', [\App\Http\Controllers\AuthController::class, 'showPinChallenge'])->name('login.pin.show');
 Route::post('/login/pin', [\App\Http\Controllers\AuthController::class, 'verifyPinChallenge'])->name('login.pin.verify');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
+
+// Password Reset
+Route::get('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'showForgotPassword'])->name('password.forgot');
+Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'sendResetCode'])->name('password.email');
+Route::get('/verify-reset', [\App\Http\Controllers\PasswordResetController::class, 'showVerifyCode'])->name('password.verify');
+Route::post('/verify-reset', [\App\Http\Controllers\PasswordResetController::class, 'verifyResetCode'])->name('password.verify.submit');
+Route::get('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'showResetPassword'])->name('password.reset');
+Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword'])->name('password.update');
 Route::middleware(['auth','redirect.admins'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
     Route::get('/transactions', [\App\Http\Controllers\TransactionsController::class, 'index'])->name('transactions.index');
@@ -86,12 +94,26 @@ Route::middleware(['auth','redirect.admins'])->group(function () {
         Route::post('/contact', [\App\Http\Controllers\SupportController::class, 'submitTicket'])->name('support.contact.submit');
         Route::get('/tickets', [\App\Http\Controllers\SupportController::class, 'myTickets'])->name('support.tickets');
     });
+
+    // Notification routes
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/summary', [\App\Http\Controllers\NotificationController::class, 'summary'])->name('notifications.summary');
+        Route::put('/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.read');
+        Route::put('/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('notifications.read_all');
+        Route::get('/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])->name('notifications.preferences');
+        Route::put('/preferences', [\App\Http\Controllers\NotificationController::class, 'updatePreferences'])->name('notifications.preferences.update');
+    });
 });
 
 // Webhooks
 Route::post('/api/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay');
+
+// Also expose non-versioned public path used by env PAWAPAY_CALLBACK_URL
+Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 // KYC: Smile ID webhook (public)
 Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
@@ -102,6 +124,11 @@ Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.refunds');
+
+// Payout webhook (optional, currently just logs and acknowledges)
+Route::post('/api/v1/webhooks/pawapay/payouts', [\App\Http\Controllers\Webhooks\PawaPayPayoutWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+    ->name('webhooks.pawapay.payouts');
 
 // Public static pages
 Route::get('/policies', function () {

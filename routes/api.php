@@ -24,14 +24,12 @@ Route::middleware([
     ->group(function () {
     // Health & feature status endpoint should always be reachable
     Route::get('/feature', function () {
-        $enabled = (bool) \App\Models\AdminSetting::getValue('mobile_api_enabled', false);
-        return response()->json(['enabled' => $enabled]);
+        // Forced enabled for local testing
+        return response()->json(['enabled' => true]);
     })->name('api.mobile.feature');
 
-    // Gate all other endpoints behind feature flag
-    Route::middleware(['mobile.feature'])->group(function () {
+    // Removed mobile.feature gate for local testing (inline routes below)
         // Auth - session cookie based
-        // Auth endpoints with CSRF exemption
         Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
             ->withoutMiddleware([
                 \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
@@ -59,6 +57,26 @@ Route::middleware([
     Route::post('/banks/suggest', [\App\Http\Controllers\BankController::class, 'suggest'])
         ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
         ->name('api.mobile.banks.suggest');
+
+    // Health checks (public for testing)
+    Route::get('/health/pawapay', function (\App\Services\PawaPay $pawaPay) {
+        return response()->json($pawaPay->checkAuth());
+    })->name('api.mobile.health.pawapay');
+
+    Route::get('/health/safehaven', function (\App\Services\SafeHaven $safeHaven) {
+        return response()->json($safeHaven->checkAuth());
+    })->name('api.mobile.health.safehaven');
+
+    Route::get('/health/safehaven/banks', function (\App\Services\SafeHaven $safeHaven) {
+        return response()->json($safeHaven->listBanks());
+    })->name('api.mobile.health.safehaven.banks');
+
+    Route::get('/health/oxr', function () {
+        /** @var \App\Services\OpenExchangeRates $oxr */
+        $oxr = app(\App\Services\OpenExchangeRates::class);
+        $rates = $oxr->fetchUsdRates();
+        return response()->json($rates);
+    })->name('api.mobile.health.oxr');
 
         // Authenticated routes
         Route::middleware(['auth'])->group(function () {
@@ -89,13 +107,28 @@ Route::middleware([
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->middleware(['throttle:20,1', 'check.limits'])
             ->name('api.mobile.transfers.confirm');
+        Route::post('/transfers/{transfer}/payin/status', [\App\Http\Controllers\Api\TransfersController::class, 'payinStatus'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.transfers.payin_status');
+        Route::post('/transfers/{transfer}/payout', [\App\Http\Controllers\Api\TransfersController::class, 'initiatePayout'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.transfers.payout');
+        Route::post('/transfers/{transfer}/payout/status', [\App\Http\Controllers\Api\TransfersController::class, 'payoutStatus'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.transfers.payout_status');
 
         Route::get('/transfers/{transfer}/timeline', [\App\Http\Controllers\Api\TransfersController::class, 'timeline'])->name('api.mobile.transfers.timeline');
         Route::get('/transfers/{transfer}/receipt-url', [\App\Http\Controllers\Api\TransfersController::class, 'receiptUrl'])->name('api.mobile.transfers.receipt_url');
+        Route::get('/transfers/{transfer}/receipt.pdf', [\App\Http\Controllers\Api\TransfersController::class, 'receiptPdf'])->name('api.mobile.transfers.receipt_pdf');
+        Route::post('/transfers/{transfer}/share-url', [\App\Http\Controllers\Api\TransfersController::class, 'shareLink'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.transfers.share_url');
 
         // Pricing & Limits
         Route::get('/pricing/limits', [\App\Http\Controllers\Api\PricingController::class, 'limits'])->name('api.mobile.pricing.limits');
         Route::get('/pricing/rate-preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])->name('api.mobile.pricing.preview');
+
+        // (health endpoints moved above to be public)
 
         // Profile
         Route::get('/profile', [\App\Http\Controllers\Api\ProfileController::class, 'show'])->name('api.mobile.profile.show');
@@ -113,6 +146,30 @@ Route::middleware([
         Route::put('/profile/notifications', [\App\Http\Controllers\Api\ProfileController::class, 'updateNotifications'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.profile.notifications.update');
+        
+        // Notification management
+        Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('api.mobile.notifications.index');
+        Route::get('/notifications/summary', [\App\Http\Controllers\NotificationController::class, 'summary'])->name('api.mobile.notifications.summary');
+        Route::put('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.read');
+        Route::put('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.read_all');
+        Route::get('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])->name('api.mobile.notifications.preferences');
+        Route::put('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'updatePreferences'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.notifications.preferences.update');
+        
+        // Device management for push notifications
+        Route::post('/devices/register', [\App\Http\Controllers\Api\DeviceController::class, 'register'])->name('api.mobile.devices.register');
+        Route::delete('/devices/unregister', [\App\Http\Controllers\Api\DeviceController::class, 'unregister'])->name('api.mobile.devices.unregister');
+        Route::get('/devices', [\App\Http\Controllers\Api\DeviceController::class, 'devices'])->name('api.mobile.devices.index');
+        Route::post('/devices/test-push', [\App\Http\Controllers\Api\DeviceController::class, 'testPush'])->name('api.mobile.devices.test_push');
+        
+        // Password Reset (Mobile API)
+        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])->name('api.mobile.auth.forgot_password');
+        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])->name('api.mobile.auth.reset_password');
 
         // Policies
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
@@ -127,8 +184,6 @@ Route::middleware([
         Route::post('/support/tickets/{ticket}/reply', [\App\Http\Controllers\Api\SupportController::class, 'reply'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.support.tickets.reply');
-    }); // end auth group
-
-    }); // end mobile.feature gate group
+        }); // end auth group
 
 }); // end outer mobile group

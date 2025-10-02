@@ -11,6 +11,8 @@ use App\Models\AdminSetting;
 use App\Services\PricingEngine;
 use App\Services\RefundService;
 use App\Services\LimitCheckService;
+use App\Services\NotificationService;
+use App\Services\PhoneNumberService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +24,13 @@ use Illuminate\Support\Facades\URL;
 
 class TransferController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     public function showBankForm(Request $request): View
     {
         $data = [
@@ -227,6 +236,14 @@ class TransferController extends Controller
         ]);
 
         session(['transfer.quote_id' => $quote->id]);
+        
+        // Send quote created notification
+        if ($quote->user) {
+            $this->notificationService->dispatchUserNotification('transfer.quote.created', $quote->user, [
+                'quote' => $quote->toArray()
+            ]);
+        }
+        
         return redirect()->route('transfer.quote')->with('quote_ready', true);
     }
 
@@ -265,31 +282,16 @@ class TransferController extends Controller
         ]);
         // No OTP capture here; providers will handle authorisation out-of-band if needed.
 
-        // Normalize MSISDN to E.164 for Cameroon and auto-detect provider
-        $rawMsisdn = preg_replace('/\s+/', '', $validated['msisdn']);
-        $digits = preg_replace('/\D+/', '', $rawMsisdn ?? '');
-        if (str_starts_with($digits, '00')) { $digits = substr($digits, 2); }
-        if (str_starts_with($rawMsisdn, '+')) { /* already handled by removing non-digits */ }
-        if (strlen($digits) === 9 && str_starts_with($digits, '6')) {
-            // Local CM format -> add country code
-            $digits = '237' . $digits;
+        // Normalize phone number using PhoneNumberService
+        $phone = PhoneNumberService::normalize($validated['msisdn']);
+        
+        // Validate Cameroon phone number
+        $validation = PhoneNumberService::validateCameroon($phone);
+        if (!$validation['valid']) {
+            return back()->with('error', $validation['error']);
         }
         
-        // Enhanced validation of CM E.164
-        if (!(strlen($digits) === 12 && str_starts_with($digits, '237'))) {
-            return back()->with('error', 'Please enter a valid Cameroon MoMo number in international format (e.g., 2376XXXXXXXX).');
-        }
-        
-        // Validate provider-specific format
-        $prefix3 = substr($digits, 3, 3);
-        $isValidMtn = preg_match('/^(65[0-9]|6[7-8][0-9])/', $prefix3);
-        $isValidOrange = preg_match('/^69[0-9]/', $prefix3);
-        
-        if (!($isValidMtn || $isValidOrange)) {
-            return back()->with('error', 'Invalid mobile money number. Please enter a valid MTN or Orange mobile money number.');
-        }
-        
-        $msisdn = $digits;
+        $msisdn = $validation['normalized'];
 
         // Provider detection for Cameroon via .env-configurable prefixes
         $prefix3 = substr($msisdn, 3, 3); // digits after 237
@@ -473,6 +475,13 @@ class TransferController extends Controller
             'provider' => $provider
         ]);
         
+        // Send transfer initiated notification
+        if ($transfer->user) {
+            $this->notificationService->dispatchUserNotification('transfer.initiated', $transfer->user, [
+                'transfer' => $transfer->toArray()
+            ]);
+        }
+        
         // Redirect to receipt page with pending status
         return redirect()
             ->route('transfer.receipt', $transfer)
@@ -500,6 +509,15 @@ class TransferController extends Controller
             $refundService = $refundService ?? app(RefundService::class);
             // Reload the transfer with a lock to prevent concurrent modifications
             $transfer = Transfer::lockForUpdate()->findOrFail($transfer->id);
+
+            // Precondition: only allow payout once pay-in is confirmed successful
+            if ($transfer->payin_status !== 'success') {
+                return $this->jsonOrRedirect($request, [
+                    'status' => 'blocked',
+                    'message' => 'Payout cannot start until pay-in is successful.',
+                    'payin_status' => $transfer->payin_status,
+                ], 409);
+            }
             
             // Check if payout was already successful
             if ($transfer->payout_status === 'success') {

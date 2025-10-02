@@ -10,11 +10,14 @@ use App\Services\OpenExchangeRates;
 use App\Services\PricingEngine;
 use App\Services\PawaPay;
 use App\Services\SafeHaven;
+use App\Services\RefundService;
 use App\Services\LimitCheckService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -258,15 +261,16 @@ class TransfersController extends Controller
                 $quote->update(['status' => 'expired']);
                 return response()->json(['success' => false, 'code' => 'QUOTE_EXPIRED', 'message' => 'Quote expired—refresh to get a new rate.'], 400);
             }
-            // Normalize MSISDN as in web flow
-            $rawMsisdn = preg_replace('/\s+/', '', $data['msisdn']);
-            $digits = preg_replace('/\D+/', '', $rawMsisdn ?? '');
-            if (str_starts_with($digits, '00')) { $digits = substr($digits, 2); }
-            if (strlen($digits) === 9 && str_starts_with($digits, '6')) { $digits = '237' . $digits; }
-            if (!(strlen($digits) === 12 && str_starts_with($digits, '237'))) {
-                return response()->json(['success' => false, 'code' => 'INVALID_MSISDN', 'message' => 'Please enter a valid Cameroon MoMo number (e.g., 2376XXXXXXXX).'], 400);
+            // Normalize phone number using PhoneNumberService
+            $phone = \App\Services\PhoneNumberService::normalize($data['msisdn']);
+            
+            // Validate Cameroon phone number
+            $validation = \App\Services\PhoneNumberService::validateCameroon($phone);
+            if (!$validation['valid']) {
+                return response()->json(['success' => false, 'code' => 'INVALID_MSISDN', 'message' => $validation['error']], 400);
             }
-            $msisdn = $digits;
+            
+            $msisdn = $validation['normalized'];
 
             // Provider detection (same heuristic)
             $prefix3 = substr($msisdn, 3, 3);
@@ -430,6 +434,283 @@ class TransfersController extends Controller
         $this->authorizeOwner($transfer);
         $url = URL::temporarySignedRoute('transfer.receipt.shared', now()->addMinutes(30), ['transfer' => $transfer->id]);
         return response()->json(['success' => true, 'url' => $url]);
+    }
+
+    /**
+     * POST /api/mobile/transfers/payin/status
+     * Poll pay-in status on PawaPay and update timeline. If success, set payout_pending.
+     */
+    public function payinStatus(Request $request, Transfer $transfer, PawaPay $pawa, SafeHaven $safeHaven)
+    {
+        $this->authorizeOwner($transfer);
+        if (!$transfer->payin_ref) {
+            return response()->json(['success' => false, 'message' => 'No pay-in reference to check.'], 400);
+        }
+
+        $statusResp = $pawa->getPayInStatus($transfer->payin_ref);
+        $status = $statusResp['status'] ?? 'pending';
+        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+        $timeline[] = [
+            'state' => 'payin_status_check',
+            'at' => now()->toIso8601String(),
+            'status' => $status,
+            'raw' => $statusResp['raw'] ?? null,
+        ];
+
+        if ($status === 'success') {
+            $transfer->update([
+                'payin_status' => 'success',
+                'status' => 'payout_pending',
+                'payin_at' => now(),
+                'timeline' => $timeline,
+            ]);
+            return response()->json(['success' => true, 'status' => 'success', 'message' => 'Pay-in completed. Payout pending.']);
+        } elseif ($status === 'failed') {
+            $reason = $statusResp['raw']['message'] ?? 'Payment failed';
+            $timeline[] = [
+                'state' => 'payin_failed',
+                'at' => now()->toIso8601String(),
+                'reason' => $reason,
+            ];
+            $transfer->update([
+                'payin_status' => 'failed',
+                'status' => 'failed',
+                'timeline' => $timeline,
+            ]);
+            return response()->json(['success' => false, 'status' => 'failed', 'message' => $reason], 400);
+        }
+
+        // still pending
+        $transfer->update([
+            'payin_status' => 'pending',
+            'status' => 'payin_pending',
+            'timeline' => $timeline,
+        ]);
+        return response()->json(['success' => true, 'status' => 'pending']);
+    }
+
+    /**
+     * POST /api/mobile/transfers/payout
+     * Initiate NGN payout using SafeHaven. Mirrors web initiatePayout but JSON-only.
+     */
+    public function initiatePayout(Request $request, Transfer $transfer, SafeHaven $safeHaven, RefundService $refundService = null)
+    {
+        $this->authorizeOwner($transfer);
+        $refundService = $refundService ?? app(RefundService::class);
+
+        return DB::transaction(function () use ($request, $transfer, $safeHaven, $refundService) {
+            // lock the row
+            $transfer = Transfer::lockForUpdate()->findOrFail($transfer->id);
+
+            // Precondition: only allow payout once pay-in is confirmed successful
+            if ($transfer->payin_status !== 'success') {
+                return response()->json([
+                    'status' => 'blocked',
+                    'message' => 'Payout cannot start until pay-in is successful.',
+                    'payin_status' => $transfer->payin_status,
+                ], 409);
+            }
+
+            if ($transfer->payout_status === 'success') {
+                return response()->json([
+                    'status' => 'already_processed',
+                    'message' => 'Payout already completed successfully',
+                    'transfer_id' => $transfer->id,
+                    'payout_ref' => $transfer->payout_ref
+                ]);
+            }
+
+            if ($transfer->payout_status === 'processing' && $transfer->payout_attempted_at > now()->subMinutes(15)) {
+                return response()->json([
+                    'status' => 'in_progress',
+                    'message' => 'Payout is already being processed',
+                    'transfer_id' => $transfer->id,
+                    'last_attempt' => $transfer->payout_attempted_at
+                ]);
+            }
+
+            $idempotencyKey = $transfer->payout_idempotency_key ?? (string) Str::uuid();
+            $transfer->update([
+                'payout_idempotency_key' => $idempotencyKey,
+                'payout_status' => 'processing',
+                'payout_attempted_at' => now(),
+                'last_payout_error' => null,
+                'payout_initiated_at' => now()
+            ]);
+
+            try {
+                $payload = [
+                    'amount_ngn_minor' => $transfer->receive_ngn_minor,
+                    'bank_code' => $transfer->recipient_bank_code,
+                    'account_number' => $transfer->recipient_account_number,
+                    'account_name' => $transfer->recipient_account_name,
+                    'narration' => 'TexaPay transfer ' . $transfer->id,
+                    'reference' => $idempotencyKey,
+                    'name_enquiry_reference' => $transfer->name_enquiry_reference,
+                    'debit_account_number' => env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER'),
+                ];
+
+                $resp = $safeHaven->payout($payload);
+
+                $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+                $timeline[] = [
+                    'state' => 'ngn_payout_initiated',
+                    'at' => now()->toIso8601String(),
+                    'reference' => $idempotencyKey,
+                    'provider_response' => $resp['raw'] ?? null
+                ];
+
+                $payoutStatus = $resp['status'] ?? 'failed';
+                $newStatus = match($payoutStatus) {
+                    'success' => 'payout_success',
+                    'failed' => 'failed',
+                    default => 'payout_pending'
+                };
+
+                $updateData = [
+                    'payout_ref' => $resp['ref'] ?? $transfer->payout_ref,
+                    'payout_status' => $payoutStatus,
+                    'status' => $newStatus,
+                    'timeline' => $timeline,
+                    'payout_attempted_at' => now()
+                ];
+
+                if ($payoutStatus === 'success') {
+                    $updateData['payout_completed_at'] = now();
+                    $timeline[] = [
+                        'state' => 'ngn_payout_success',
+                        'at' => now()->toIso8601String(),
+                        'reference' => $resp['ref'] ?? null
+                    ];
+                    $updateData['timeline'] = $timeline;
+                    app(LimitCheckService::class)->recordTransaction($transfer->user, $transfer->amount_xaf, true);
+                } elseif ($payoutStatus === 'failed') {
+                    $errorMsg = $resp['raw']['message'] ?? 'Unknown error';
+                    $updateData['last_payout_error'] = $errorMsg;
+                    $timeline[] = [
+                        'state' => 'ngn_payout_failed',
+                        'at' => now()->toIso8601String(),
+                        'error' => $errorMsg,
+                        'response' => $resp['raw'] ?? null
+                    ];
+                    $updateData['timeline'] = $timeline;
+                    $updateData['payout_status'] = 'failed';
+                    $updateData['status'] = 'failed';
+                    $transfer->update($updateData);
+                    if ($transfer->payin_status === 'success') {
+                        // fire refund asynchronously path via RefundService
+                        app()->call([$refundService, 'refundFailedPayout'], ['transfer' => $transfer->fresh()]);
+                    }
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'NGN payout failed: ' . $errorMsg,
+                        'transfer_id' => $transfer->id,
+                    ], 400);
+                }
+
+                $transfer->update($updateData);
+                return match($payoutStatus) {
+                    'success' => response()->json([
+                        'status' => 'success',
+                        'message' => 'NGN payout completed successfully.',
+                        'transfer_id' => $transfer->id,
+                        'payout_ref' => $transfer->payout_ref
+                    ]),
+                    'failed' => response()->json([
+                        'status' => 'error',
+                        'message' => 'NGN payout failed: ' . ($resp['raw']['message'] ?? 'Unknown error'),
+                        'transfer_id' => $transfer->id,
+                        'error_details' => $resp['raw'] ?? null
+                    ], 400),
+                    default => response()->json([
+                        'status' => 'pending',
+                        'message' => 'NGN payout is being processed.',
+                        'transfer_id' => $transfer->id,
+                        'payout_ref' => $transfer->payout_ref
+                    ])
+                };
+            } catch (\Exception $e) {
+                $transfer->update([
+                    'payout_status' => 'failed',
+                    'last_payout_error' => $e->getMessage(),
+                    'payout_attempted_at' => now(),
+                    'timeline' => array_merge($transfer->timeline ?? [], [[
+                        'state' => 'ngn_payout_error',
+                        'at' => now()->toIso8601String(),
+                        'error' => $e->getMessage(),
+                    ]])
+                ]);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Payout processing failed: ' . $e->getMessage(),
+                    'transfer_id' => $transfer->id,
+                ], 500);
+            }
+        });
+    }
+
+    /**
+     * POST /api/mobile/transfers/payout/status
+     */
+    public function payoutStatus(Request $request, Transfer $transfer, SafeHaven $safeHaven)
+    {
+        $this->authorizeOwner($transfer);
+        if (!$transfer->payout_ref && !$transfer->name_enquiry_reference) {
+            return response()->json(['success' => false, 'message' => 'No payout session to check.'], 400);
+        }
+        $sessionId = $transfer->payout_ref ?: $transfer->name_enquiry_reference;
+        $resp = $safeHaven->payoutStatus($sessionId);
+        $timeline = is_array($transfer->timeline) ? $transfer->timeline : [];
+        $timeline[] = [
+            'state' => 'ngn_payout_status_check',
+            'at' => now()->toIso8601String(),
+            'status' => $resp['status']
+        ];
+        $update = ['timeline' => $timeline];
+        if ($resp['status'] === 'success') {
+            $update['status'] = 'payout_success';
+            $update['payout_status'] = 'success';
+            $update['payout_completed_at'] = now();
+            app(LimitCheckService::class)->recordCompletedTransferOnce($transfer);
+        } elseif ($resp['status'] === 'failed') {
+            $update['status'] = 'failed';
+            $update['payout_status'] = 'failed';
+        } else {
+            $update['payout_status'] = 'pending';
+        }
+        $transfer->update($update);
+        return response()->json([
+            'status' => $resp['status'],
+            'transfer_status' => $update['status'] ?? $transfer->status,
+        ]);
+    }
+
+    /**
+     * GET /api/mobile/transfers/{transfer}/receipt.pdf
+     * For API, return a signed URL to the PDF route used by web.
+     */
+    public function receiptPdf(Request $request, Transfer $transfer)
+    {
+        $this->authorizeOwner($transfer);
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_PDF', true), FILTER_VALIDATE_BOOLEAN);
+        if (!$enabled) { return response()->json(['success' => false, 'message' => 'PDF disabled'], 404); }
+        $url = URL::temporarySignedRoute('transfer.receipt.pdf', now()->addMinutes(10), ['transfer' => $transfer->id]);
+        return response()->json(['success' => true, 'url' => $url, 'expires_at' => now()->addMinutes(10)->toIso8601String()]);
+    }
+
+    /**
+     * POST /api/mobile/transfers/{transfer}/share-url
+     * Generate a signed, time-limited share URL to the public receipt.
+     */
+    public function shareLink(Request $request, Transfer $transfer)
+    {
+        $this->authorizeOwner($transfer);
+        $enabled = filter_var(env('FEATURE_ENABLE_RECEIPT_SHARE', true), FILTER_VALIDATE_BOOLEAN);
+        if (!$enabled) { return response()->json(['success' => false, 'message' => 'Share feature disabled'], 404); }
+        $days = (int) env('RECEIPT_SHARE_TTL_DAYS', 7);
+        $expires = now()->addDays(max(1, $days));
+        $url = URL::temporarySignedRoute('transfer.receipt.shared', $expires, ['transfer' => $transfer->id]);
+        return response()->json(['success' => true, 'url' => $url, 'expires_at' => $expires->toIso8601String()]);
     }
 
     protected function authorizeOwner(Transfer $transfer): void

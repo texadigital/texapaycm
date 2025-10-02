@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\LimitCheckService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -10,10 +11,12 @@ use Illuminate\Support\Facades\Storage;
 class ProfileController extends Controller
 {
     protected $limitCheckService;
+    protected $notificationService;
 
-    public function __construct(LimitCheckService $limitCheckService)
+    public function __construct(LimitCheckService $limitCheckService, NotificationService $notificationService)
     {
         $this->limitCheckService = $limitCheckService;
+        $this->notificationService = $notificationService;
     }
 
     public function index(Request $request)
@@ -97,11 +100,21 @@ class ProfileController extends Controller
             $validated['avatar_path'] = $path;
         }
 
+        $oldData = $user->only(['full_name', 'notification_email', 'avatar_path']);
+        
         $user->fill([
             'full_name' => $validated['full_name'] ?? $user->full_name,
             'notification_email' => $validated['notification_email'] ?? $user->notification_email,
             'avatar_path' => $validated['avatar_path'] ?? $user->avatar_path,
         ])->save();
+
+        // Send profile update notification
+        $changes = array_diff_assoc($user->only(['full_name', 'notification_email', 'avatar_path']), $oldData);
+        if (!empty($changes)) {
+            $this->notificationService->dispatchUserNotification('profile.updated', $user, [
+                'changes' => $changes
+            ]);
+        }
 
         return back()->with('success', 'Profile updated.');
     }
