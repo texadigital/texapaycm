@@ -21,6 +21,10 @@
         .kv { display: flex; justify-content: space-between; margin: 6px 0; color: #c9d4e5; }
         .kv strong { color: #e6e8ec; }
         .countdown { font-weight: 600; color: #f59e0b; }
+        .live { font-size: 14px; color:#cbd5e1; margin-top:8px; }
+        .live .pill { display:inline-block;background:#19324d;color:#b8ecff;border:1px solid #28557a;padding:4px 8px;border-radius:999px;font-weight:600;margin-right:8px;}
+        .live .row { display:flex; align-items:center; gap:10px; }
+        .live .err { color:#fecaca; }
     </style>
 <div class="container">
     <h1>Quote • XAF → NGN</h1>
@@ -69,6 +73,16 @@
             @csrf
             <label for="amount_xaf">Amount to send (XAF)</label>
             <input type="number" id="amount_xaf" name="amount_xaf" min="1" step="1" value="{{ old('amount_xaf') }}" placeholder="e.g. 100000" required />
+            <div id="livePreview" class="live" aria-live="polite">
+                <div id="liveRow" class="row" style="display:none;">
+                    <span id="ratePill" class="pill">1 XAF ≈ — NGN</span>
+                    <span>Recipient gets: <strong id="recvNgn">—</strong> NGN</span>
+                    <span>Fees: <strong id="feesXaf">—</strong> XAF</span>
+                    <span>You pay: <strong id="payXaf">—</strong> XAF</span>
+                </div>
+                <div id="liveLoading" style="display:none;">Calculating…</div>
+                <div id="liveError" class="err" style="display:none;">Rate unavailable — please try again.</div>
+            </div>
             <button class="btn" type="submit">Get Quote</button>
         </form>
     </div>
@@ -107,6 +121,15 @@
     var el = document.getElementById('countdown');
     var btn = document.getElementById('confirmBtn');
     var refreshTimeout = null;
+    var amountEl = document.getElementById('amount_xaf');
+    var routePreview = "{{ route('api.pricing.preview') }}";
+    var liveRow = document.getElementById('liveRow');
+    var ratePill = document.getElementById('ratePill');
+    var recvNgn = document.getElementById('recvNgn');
+    var feesXaf = document.getElementById('feesXaf');
+    var payXaf = document.getElementById('payXaf');
+    var liveLoading = document.getElementById('liveLoading');
+    var liveError = document.getElementById('liveError');
     
     if (!el) return;
     
@@ -184,6 +207,70 @@
     
     // Check expiration every 10 seconds
     var expirationCheck = setInterval(checkExpiration, 10000);
+
+    // ---- Live pricing preview (debounced) ----
+    function formatNumber(n, frac) {
+        var x = Number(n);
+        if (!isFinite(x)) return '—';
+        return x.toLocaleString(undefined, { minimumFractionDigits: frac, maximumFractionDigits: frac });
+    }
+
+    function renderPreview(data) {
+        liveLoading.style.display = 'none';
+        liveError.style.display = 'none';
+        if (!data) { liveRow.style.display = 'none'; return; }
+        liveRow.style.display = '';
+        ratePill.textContent = '1 XAF ≈ ' + formatNumber(data.adjustedRate, 6) + ' NGN';
+        recvNgn.textContent = formatNumber((data.receiveNgnMinor || 0) / 100, 2);
+        feesXaf.textContent = formatNumber(data.feeTotalXaf || 0, 0);
+        payXaf.textContent = formatNumber(data.totalPayXaf || 0, 0);
+    }
+
+    var liveTimer = null;
+    function fetchPreviewDebounced() {
+        if (!amountEl) return;
+        var val = amountEl.value ? parseInt(amountEl.value, 10) : 0;
+        if (liveTimer) { clearTimeout(liveTimer); }
+        liveTimer = setTimeout(function() {
+            if (!val || val < 1) { renderPreview(null); return; }
+            liveLoading.style.display = '';
+            liveError.style.display = 'none';
+            fetch(routePreview + '?amountXaf=' + encodeURIComponent(val), {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(function(r){ if(!r.ok) throw new Error('bad'); return r.json(); })
+            .then(function(json){
+                // preview endpoint returns fields directly (not wrapped)
+                if (json && typeof json.adjustedRate !== 'undefined') {
+                    renderPreview(json);
+                } else if (json && json.amountXaf) {
+                    renderPreview(json); // same keys
+                } else if (json && json.success && json.quote) {
+                    // not expected here, but guard
+                    renderPreview({
+                        adjustedRate: json.quote.adjustedRate,
+                        receiveNgnMinor: json.quote.receiveNgnMinor,
+                        feeTotalXaf: json.quote.feeTotalXaf,
+                        totalPayXaf: json.quote.totalPayXaf
+                    });
+                } else {
+                    throw new Error('shape');
+                }
+            })
+            .catch(function(){
+                liveLoading.style.display = 'none';
+                liveRow.style.display = 'none';
+                liveError.style.display = '';
+            });
+        }, 400);
+    }
+
+    if (amountEl) {
+        amountEl.addEventListener('input', fetchPreviewDebounced);
+        // Fire once on load if there is a value
+        if (amountEl.value) { fetchPreviewDebounced(); }
+    }
 })();
 </script>
 @endsection

@@ -13,6 +13,11 @@ Route::get('/', function () {
     return redirect()->route('transfer.bank');
 });
 
+// Authenticated JSON alias for pricing preview (used by web quote page live preview)
+Route::middleware(['auth'])
+    ->get('/api/pricing/preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])
+    ->name('api.pricing.preview');
+
 // Admin-friendly receipt route (avoid redirect.admins so admins can view receipts)
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/transfer/{transfer}/receipt', [\App\Http\Controllers\TransferController::class, 'showReceipt'])
