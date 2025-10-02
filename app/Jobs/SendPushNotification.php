@@ -20,8 +20,7 @@ class SendPushNotification implements ShouldQueue
     public int $backoff = 30;
 
     public function __construct(
-        public UserNotification $notification,
-        private FcmService $fcmService
+        public UserNotification $notification
     ) {
     }
 
@@ -55,8 +54,10 @@ class SendPushNotification implements ShouldQueue
             $notificationData = $this->prepareNotificationData();
             $payload = $this->preparePayload();
 
+            // Resolve FcmService from container (constructor DI removed for queued compatibility)
+            $fcmService = app(FcmService::class);
             // Send to all active devices
-            $results = $this->fcmService->sendToDevices($devices->toArray(), $notificationData, $payload);
+            $results = $fcmService->sendToDevices($devices->toArray(), $notificationData, $payload);
 
             $successCount = count(array_filter($results));
             $totalCount = count($results);
@@ -104,7 +105,7 @@ class SendPushNotification implements ShouldQueue
 
         // Check user's notification preferences
         $preference = $user->notificationPreferences()
-            ->where('type', $this->notification->type)
+            ->where('notification_type', $this->notification->type)
             ->first();
 
         if ($preference && !$preference->push_enabled) {

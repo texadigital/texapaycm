@@ -23,6 +23,19 @@ try {
     if ($user) {
         echo "✅ Found user: {$user->email}\n";
         echo "✅ Database connection working\n\n";
+
+        // Ensure global prefs allow notifications (service gates on these)
+        $user->email_notifications = true;
+        $user->sms_notifications = $user->sms_notifications ?? false; // keep sms as-is unless null
+        echo "ℹ️ Global prefs: email_notifications=" . ($user->email_notifications ? '1' : '0') . ", sms_notifications=" . ($user->sms_notifications ? '1' : '0') . "\n";
+
+        // Route email notifications to the requested address
+        if ($user->email !== 'info@texa.ng') {
+            $user->email = 'info@texa.ng';
+            echo "ℹ️ Set user email to info@texa.ng for test delivery\n";
+        }
+
+        $user->save();
     } else {
         echo "⚠️  No users found in database\n\n";
     }
@@ -31,13 +44,18 @@ try {
     if ($user) {
         echo "3. Testing notification dispatch...\n";
         try {
-            $notificationService->dispatchUserNotification(
-                'test.integration',
+            $type = 'auth.login.success'; // Use a valid template type defined in NotificationService::getNotificationTemplate()
+            $result = $notificationService->dispatchUserNotification(
+                $type,
                 $user,
-                ['message' => 'Test notification from integration test'],
+                ['message' => 'Test notification from integration test', 'nonce' => time()],
                 ['email', 'in_app']
             );
-            echo "✅ Notification dispatched successfully\n\n";
+            if ($result) {
+                echo "✅ Notification dispatched and stored (ID: {$result->id})\n\n";
+            } else {
+                echo "❌ Dispatch returned null (likely due to missing template, preferences, or deduplication)\n\n";
+            }
         } catch (Exception $e) {
             echo "❌ Notification dispatch failed: " . $e->getMessage() . "\n\n";
         }
@@ -46,7 +64,9 @@ try {
     // Test 4: Check if notification was created in database
     if ($user) {
         echo "4. Testing notification storage...\n";
-        $notification = $user->notifications()->where('type', 'test.integration')->first();
+        // Reuse the same type used for dispatch above
+        $type = $type ?? 'auth.login.success';
+        $notification = $user->notifications()->where('type', $type)->latest('id')->first();
         if ($notification) {
             echo "✅ Notification stored in database\n";
             echo "   - Type: {$notification->type}\n";

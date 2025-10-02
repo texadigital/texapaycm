@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\UserNotification;
+use App\Services\PhoneNumberService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -26,9 +27,20 @@ class SendSmsNotification implements ShouldQueue
     {
         try {
             $user = $this->notification->user;
+            // Early debug trace
+            Log::info('SMS job start', [
+                'notification_id' => $this->notification->id,
+                'user_id' => $user?->id,
+                'type' => $this->notification->type,
+                'payload_keys' => array_keys((array) ($this->notification->payload ?? [])),
+                'tw_sid_set' => (bool) config('services.twilio.sid'),
+                'tw_from_set' => (bool) config('services.twilio.phone_number'),
+            ]);
             
             // Check if user has SMS notifications enabled
-            if (!$user->sms_notifications) {
+            // Always allow password reset notifications regardless of global SMS toggle
+            $isPasswordReset = str_starts_with($this->notification->type, 'auth.password.reset.');
+            if (!$isPasswordReset && !$user->sms_notifications) {
                 Log::info('SMS notifications disabled for user', [
                     'user_id' => $user->id,
                     'notification_id' => $this->notification->id
@@ -53,13 +65,19 @@ class SendSmsNotification implements ShouldQueue
                 return;
             }
 
-            // Format phone number for international format
-            $phoneNumber = $this->formatPhoneNumber($user->phone);
+            // Format phone number for international format (E.164) via PhoneNumberService
+            $phoneNumber = PhoneNumberService::toE164((string) $user->phone);
             
             // Create SMS content from notification payload
             $smsContent = $this->createSmsContent();
             
             // Send SMS via Twilio
+            Log::info('SMS dispatching', [
+                'user_id' => $user->id,
+                'to' => $phoneNumber,
+                'type' => $this->notification->type,
+                'len' => strlen($smsContent),
+            ]);
             $this->sendSms($phoneNumber, $smsContent);
 
             Log::info('SMS notification sent successfully', [
@@ -106,25 +124,7 @@ class SendSmsNotification implements ShouldQueue
         ]);
     }
 
-    /**
-     * Format phone number for international format
-     */
-    private function formatPhoneNumber(string $phone): string
-    {
-        // Remove any non-numeric characters
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        // If it starts with 0, replace with +237 (Cameroon country code)
-        if (str_starts_with($phone, '0')) {
-            $phone = '+237' . substr($phone, 1);
-        }
-        // If it doesn't start with +, add +237
-        elseif (!str_starts_with($phone, '+')) {
-            $phone = '+237' . $phone;
-        }
-        
-        return $phone;
-    }
+    // Formatting handled by PhoneNumberService::toE164()
 
     /**
      * Create SMS content from notification payload
@@ -138,6 +138,15 @@ class SendSmsNotification implements ShouldQueue
         $user = $this->notification->user;
         
         switch ($type) {
+            case 'auth.password.reset.requested':
+                $code = (string)($payload['reset_code'] ?? '');
+                $mins = 15;
+                return $code
+                    ? "TexaPay: Your password reset code is ${code}. It expires in ${mins} minutes."
+                    : "TexaPay: Password reset requested. Please use the code sent to you to reset your password.";
+
+            case 'auth.password.reset.success':
+                return "TexaPay: Your password has been reset successfully. You can now sign in.";
             case 'auth.login.success':
                 return "Welcome back to TexaPay! You've successfully logged in.";
                 

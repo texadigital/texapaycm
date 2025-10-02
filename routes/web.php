@@ -60,6 +60,8 @@ Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout'])-
 // Password Reset
 Route::get('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'showForgotPassword'])->name('password.forgot');
 Route::post('/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'sendResetCode'])->name('password.email');
+Route::get('/verify-reset', [\App\Http\Controllers\PasswordResetController::class, 'showVerifyCode'])->name('password.verify');
+Route::post('/verify-reset', [\App\Http\Controllers\PasswordResetController::class, 'verifyResetCode'])->name('password.verify.submit');
 Route::get('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'showResetPassword'])->name('password.reset');
 Route::post('/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'resetPassword'])->name('password.update');
 Route::middleware(['auth','redirect.admins'])->group(function () {

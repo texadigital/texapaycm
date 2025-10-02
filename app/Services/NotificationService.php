@@ -106,6 +106,11 @@ class NotificationService
      */
     protected function shouldSendNotification(User $user, string $type): bool
     {
+        // Always allow password reset notifications regardless of global toggles
+        if (str_starts_with($type, 'auth.password.reset.')) {
+            return true;
+        }
+
         // Check global notification preferences
         if (!$user->email_notifications && !$user->sms_notifications) {
             return false;
@@ -156,6 +161,15 @@ class NotificationService
             'auth.login.new_device' => [
                 'title' => 'New Device Login',
                 'message' => 'Your account was accessed from a new device. If this wasn\'t you, please secure your account immediately.',
+            ],
+            // Password reset
+            'auth.password.reset.requested' => [
+                'title' => 'Password Reset Code',
+                'message' => 'Your password reset code was requested. If this wasn\'t you, please secure your account.',
+            ],
+            'auth.password.reset.success' => [
+                'title' => 'Password Reset Successful',
+                'message' => 'Your password has been reset successfully. You can now sign in with your new password.',
             ],
 
             // Profile
@@ -266,16 +280,17 @@ class NotificationService
      */
     protected function dispatchToChannels(UserNotification $notification, array $channels): void
     {
+        $queue = env('NOTIFICATION_QUEUE_NAME', 'notifications');
         foreach ($channels as $channel) {
             switch ($channel) {
                 case 'email':
-                    SendEmailNotification::dispatch($notification);
+                    SendEmailNotification::dispatch($notification)->onQueue($queue);
                     break;
                 case 'sms':
-                    SendSmsNotification::dispatch($notification);
+                    SendSmsNotification::dispatch($notification)->onQueue($queue);
                     break;
                 case 'push':
-                    SendPushNotification::dispatch($notification);
+                    SendPushNotification::dispatch($notification)->onQueue($queue);
                     break;
                 case 'in_app':
                     // In-app notifications are already stored in database
