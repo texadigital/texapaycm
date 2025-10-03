@@ -9,6 +9,8 @@ import AuthNoticeProvider from "@/components/providers/auth-notice";
 import AuthNoticeBanner from "@/components/guards/auth-notice-banner";
 import OfflineQueueProvider from "@/components/providers/offline-queue-provider";
 import AnalyticsProvider from "@/components/providers/analytics";
+import BottomNav from "@/components/bottom-nav";
+import InstallPromptProvider from "@/components/providers/install-prompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,8 +51,10 @@ export default function RootLayout({
               <SessionWatcher />
               <AuthNoticeBanner />
               <AnalyticsProvider />
+              <InstallPromptProvider />
               <OfflineQueueProvider>
-                {children}
+                <div className="pb-16">{children}</div>
+                <BottomNav />
               </OfflineQueueProvider>
             </AuthNoticeProvider>
           </AuthProvider>

@@ -2,6 +2,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import RequireAuth from "@/components/guards/require-auth";
+import Link from "next/link";
 import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -39,14 +40,14 @@ export default function TransfersListPage() {
         ) : (
           <div className="border rounded divide-y">
             {items.map((t: Transfer) => (
-              <a key={t.id} href={`/transfer/${t.id}/timeline`} className="block p-3 text-sm hover:bg-gray-50">
+              <Link key={t.id} href={`/transfer/${t.id}/timeline`} className="block p-3 text-sm hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div className="font-medium capitalize">{t.status?.replaceAll("_"," ") || "Transfer"}</div>
                   <div className="text-xs text-gray-600">{t.createdAt ? new Date(t.createdAt).toLocaleString() : null}</div>
                 </div>
                 <div className="text-xs text-gray-600">{t.reference ? `Ref: ${t.reference}` : null}</div>
                 {t.amountXaf ? <div className="text-xs">Amount: {t.amountXaf.toLocaleString()} XAF</div> : null}
-              </a>
+              </Link>
             ))}
           </div>
         )}

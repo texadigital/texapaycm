@@ -29,6 +29,9 @@ export default withPWA({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
+  workboxOptions: {
+    navigateFallback: "/offline",
+  },
   runtimeCaching: [
     {
       urlPattern: /\/api\/mobile\/banks.*/,
