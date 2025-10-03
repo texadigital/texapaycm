@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import http from "@/lib/api";
 import { useRouter } from "next/navigation";
 
@@ -163,7 +164,7 @@ export default function RegisterPage() {
           </button>
         </form>
         <p className="text-sm">
-          Have an account? <a className="underline" href="/auth/login">Sign in</a>
+          Have an account? <Link className="underline" href="/auth/login">Sign in</Link>
         </p>
       </div>
     </div>

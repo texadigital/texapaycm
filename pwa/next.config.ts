@@ -32,6 +32,16 @@ export default withPWA({
   workboxOptions: {
     navigateFallback: "/offline",
   },
+  additionalManifestEntries: [
+    { url: "/", revision: undefined },
+    { url: "/dashboard", revision: undefined },
+    { url: "/transfers", revision: undefined },
+    { url: "/profile", revision: undefined },
+    { url: "/notifications", revision: undefined },
+    { url: "/support", revision: undefined },
+    { url: "/kyc", revision: undefined },
+    { url: "/offline", revision: undefined },
+  ],
   runtimeCaching: [
     {
       urlPattern: /\/api\/mobile\/banks.*/,
