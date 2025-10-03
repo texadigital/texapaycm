@@ -7,6 +7,7 @@ import TopBar from "@/components/top-bar";
 import SessionWatcher from "@/components/guards/session-watcher";
 import AuthNoticeProvider from "@/components/providers/auth-notice";
 import AuthNoticeBanner from "@/components/guards/auth-notice-banner";
+import OfflineQueueProvider from "@/components/providers/offline-queue-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +47,9 @@ export default function RootLayout({
               <TopBar />
               <SessionWatcher />
               <AuthNoticeBanner />
-              {children}
+              <OfflineQueueProvider>
+                {children}
+              </OfflineQueueProvider>
             </AuthNoticeProvider>
           </AuthProvider>
         </QueryProvider>
