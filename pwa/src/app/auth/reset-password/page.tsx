@@ -76,7 +76,7 @@ export default function ResetPasswordPage() {
                 placeholder="4-6 digits"
                 required
                 inputMode="numeric"
-                pattern="\d{4,6}"
+                pattern="[0-9]{4,6}"
                 type="password"
               />
             </div>
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
                 placeholder="6-digit code"
                 required
                 inputMode="numeric"
-                pattern="\n?\d{4,8}"
+                pattern="[0-9]{4,8}"
               />
             </div>
             <div>
@@ -136,4 +136,5 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
 }
