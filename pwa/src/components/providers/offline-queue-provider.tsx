@@ -22,12 +22,15 @@ export default function OfflineQueueProvider({ children }: { children: React.Rea
 
     const onOnline = () => flush();
     const onFocus = () => { if (hasQueue()) flush(); };
+    const onVisible = () => { if (document.visibilityState === 'visible' && hasQueue()) flush(); };
     window.addEventListener('online', onOnline);
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
     const t = setInterval(() => { if (hasQueue() && navigator.onLine) flush(); }, 15000);
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
       clearInterval(t);
     };
   }, []);
