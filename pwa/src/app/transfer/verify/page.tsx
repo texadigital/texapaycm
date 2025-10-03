@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { addRecent } from "@/lib/recents";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import BankPicker, { Bank } from "@/components/banks/bank-picker";
@@ -26,6 +27,8 @@ export default function VerifyRecipientPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [suggestions, setSuggestions] = React.useState<Bank[]>([]);
   const [suggestBusy, setSuggestBusy] = React.useState(false);
+  const [unauthorized, setUnauthorized] = React.useState(false);
+  const [lastNEKey, setLastNEKey] = React.useState<string>("");
 
   const nameEnquiry = useMutation({
     mutationFn: async () => {
@@ -34,8 +37,27 @@ export default function VerifyRecipientPage() {
       const res = await http.post("/api/mobile/transfers/name-enquiry", { bankCode, accountNumber: account });
       return res.data as NameEnquiryRes;
     },
-    onSuccess: (d) => setNe(d),
-    onError: (e: any) => setError(e?.response?.data?.message || e.message),
+    onSuccess: (d) => {
+      setNe(d);
+      if (d?.accountName) {
+        addRecent({ bankCode, bankName, accountNumber: account, accountName: d.accountName });
+      }
+    },
+    onError: (e: any) => {
+      const msg = e?.response?.data?.message || e.message;
+      setError(msg);
+      if (e?.response?.status === 401) setUnauthorized(true);
+    },
+  });
+
+  // Recent recipients via last transfers
+  const recents = useQuery<{ data: Array<{ bankCode: string; accountNumber: string; accountName?: string; bankName?: string }>}>({
+    queryKey: ["recent-recipients"],
+    queryFn: async () => {
+      const res = await http.get("/api/mobile/transfers", { params: { perPage: 20 } });
+      return res.data as any;
+    },
+    staleTime: 60_000,
   });
 
   React.useEffect(() => {
@@ -65,8 +87,31 @@ export default function VerifyRecipientPage() {
     return () => { cancelled = true; };
   }, [account]);
 
+  // Auto name-enquiry when bank selected and account length looks valid (>=10)
+  React.useEffect(() => {
+    const acct = account.trim();
+    const ready = !!bankCode && acct.length >= 10;
+    if (!ready) return;
+    const key = bankCode + ":" + acct;
+    if (key === lastNEKey) return; // avoid duplicate
+    const id = setTimeout(() => {
+      setLastNEKey(key);
+      nameEnquiry.mutate();
+    }, 500); // debounce
+    return () => clearTimeout(id);
+  }, [bankCode, account, lastNEKey]);
+
+  // Listen for session expiry broadcast and surface banner
+  React.useEffect(() => {
+    const onUnauthorized = () => setUnauthorized(true);
+    window.addEventListener('auth:unauthorized', onUnauthorized as any);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized as any);
+  }, []);
+
   function goNext() {
     if (!ne?.accountName || !bankCode || !account) return;
+    // persist in MRU as well
+    addRecent({ bankCode, bankName, accountNumber: account, accountName: ne.accountName });
     const sp = new URLSearchParams({ bankCode, bankName, account, accountName: ne.accountName });
     router.push(`/transfer/quote?${sp.toString()}`);
   }
@@ -75,6 +120,11 @@ export default function VerifyRecipientPage() {
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-2xl mx-auto space-y-6">
         <h1 className="text-2xl font-semibold">Verify recipient</h1>
+        {unauthorized && (
+          <div className="text-sm text-orange-700 border border-orange-200 rounded p-2">
+            Your session has expired. Please <a className="underline" href="/auth/login">log in</a> and try again.
+          </div>
+        )}
         {error ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{error}</div> : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-1">
@@ -109,6 +159,23 @@ export default function VerifyRecipientPage() {
             <span className="text-gray-600">verified</span>
           </div>
         )}
+        {/* Recent recipients */}
+        {recents.data?.data?.length ? (
+          <div>
+            <div className="text-sm font-medium mb-1">Recent recipients</div>
+            <div className="flex flex-wrap gap-2">
+              {[...new Map(recents.data.data.map(r => [r.bankCode+":"+r.accountNumber, r])).values()].slice(0,8).map((r) => (
+                <button
+                  key={r.bankCode+":"+r.accountNumber}
+                  className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                  onClick={() => { setBankCode(r.bankCode); setBankName(r.bankName || ""); setAccount(r.accountNumber); if (r.accountName) setNe({ accountName: r.accountName, bankName: r.bankName, success: true }); }}
+                >
+                  {(r.bankName || r.bankCode)} • {r.accountNumber}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div>
           <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" onClick={goNext} disabled={!ne?.accountName}>
             Confirm and continue

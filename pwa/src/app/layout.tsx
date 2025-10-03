@@ -4,6 +4,7 @@ import "./globals.css";
 import QueryProvider from "@/components/providers/query-provider";
 import AuthProvider from "@/components/providers/auth-provider";
 import TopBar from "@/components/top-bar";
+import SessionWatcher from "@/components/guards/session-watcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({
         <QueryProvider>
           <AuthProvider>
             <TopBar />
+            <SessionWatcher />
             {children}
           </AuthProvider>
         </QueryProvider>
