@@ -3,7 +3,7 @@ import React from "react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import http from "@/lib/api";
-import { validateCameroon, providerMeta, formatForDisplay } from "@/lib/phone";
+import { validateCameroon, formatForDisplay } from "@/lib/phone";
 import { setAccessToken } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [pin, setPin] = React.useState("");
+  const [pinStep, setPinStep] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   // No CSRF needed for JWT login
@@ -27,17 +28,9 @@ export default function LoginPage() {
       if (!v.valid) {
         throw new Error(v.error || "Invalid phone number");
       }
-      const res = await http.post(
-        "/api/mobile/auth/login",
-        {
-          phone: v.normalized,
-          password,
-          pin: pin || undefined,
-        },
-        {
-          withCredentials: true,
-        }
-      );
+      const payload: any = { phone: v.normalized, password };
+      if (pinStep && pin) payload.pin = pin;
+      const res = await http.post("/api/mobile/auth/login", payload, { withCredentials: true });
       const data = res.data as any;
       if (data?.accessToken) {
         setAccessToken(data.accessToken);
@@ -45,7 +38,13 @@ export default function LoginPage() {
       return data;
     },
     onError: (e: any) => {
+      const code = e?.response?.data?.code;
       const msg = e?.response?.data?.message || e.message || "Login failed";
+      if (code === 'PIN_REQUIRED' && !pinStep) {
+        setPinStep(true);
+        setError("Enter your PIN to continue.");
+        return;
+      }
       setError(msg);
     },
     onSuccess: () => {
@@ -78,18 +77,9 @@ export default function LoginPage() {
               placeholder="2376XXXXXXXX"
               required
             />
-            {(() => {
-              const v = validateCameroon(phone);
-              const meta = providerMeta(v.provider);
-              return (
-                <div className="mt-1 flex items-center gap-2 text-xs">
-                  <span className="text-gray-600">{formatForDisplay(phone)}</span>
-                  {meta ? (
-                    <span className={`px-2 py-0.5 rounded ${meta.color}`}>{meta.label}</span>
-                  ) : null}
-                </div>
-              );
-            })()}
+            <div className="mt-1 flex items-center gap-2 text-xs">
+              <span className="text-gray-600">{formatForDisplay(phone)}</span>
+            </div>
           </div>
           <div>
             <label className="block text-sm mb-1">Password</label>
@@ -101,21 +91,22 @@ export default function LoginPage() {
               required
             />
           </div>
-          <div>
-            <label className="block text-sm mb-1">PIN (if required)</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              inputMode="numeric"
-              type="password"
-              autoComplete="one-time-code"
-              // Use a browser-compatible pattern; only validated when not empty
-              pattern="[0-9]{4,6}"
-              placeholder="4-6 digits"
-              aria-invalid={false}
-            />
-          </div>
+          {pinStep && (
+            <div>
+              <label className="block text-sm mb-1">Step 2: PIN</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                inputMode="numeric"
+                type="password"
+                autoComplete="one-time-code"
+                pattern="[0-9]{4,6}"
+                placeholder="4-6 digits"
+                aria-invalid={false}
+              />
+            </div>
+          )}
           <button
             type="submit"
             className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
