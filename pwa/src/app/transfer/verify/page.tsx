@@ -5,6 +5,7 @@ import { addRecent, loadRecents } from "@/lib/recents";
 import { isUnauthorizedErr } from "@/lib/errors";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import BankPicker, { Bank } from "@/components/banks/bank-picker";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -182,6 +183,9 @@ export default function VerifyRecipientPage() {
             Verified automatically. <button className="underline" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending}>Verify again</button>
           </div>
         )}
+        {nameEnquiry.isPending && (
+          <CardSkeleton lines={2} />
+        )}
         {ne?.accountName && (
           <div className="border rounded p-3 text-sm flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />
@@ -190,7 +194,11 @@ export default function VerifyRecipientPage() {
           </div>
         )}
         {/* Recent recipients (API + local MRU) */}
-        {(recents.data?.data?.length || loadRecents().length) ? (
+        {(recents.isLoading) ? (
+          <div className="space-y-2">
+            <CardSkeleton lines={2} />
+          </div>
+        ) : ((recents.data?.data?.length || loadRecents().length) ? (
           <div>
             <div className="text-sm font-medium mb-1">Recent recipients</div>
             <div className="flex flex-wrap gap-2">
@@ -220,7 +228,7 @@ export default function VerifyRecipientPage() {
               })()}
             </div>
           </div>
-        ) : null}
+        ) : null)}
         <div>
           <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" onClick={goNext} disabled={!ne?.accountName}>
             Confirm and continue

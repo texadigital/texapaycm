@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import http from "@/lib/api";
@@ -284,6 +285,11 @@ export default function ConfirmPage() {
                 ) : "Refresh status"}
               </button>
             </div>
+          </div>
+        )}
+        {confirm.isPending && (
+          <div className="mt-3">
+            <CardSkeleton lines={2} />
           </div>
         )}
       </div>

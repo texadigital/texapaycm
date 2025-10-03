@@ -57,6 +57,19 @@ export default withPWA({
       },
     },
     {
+      // Transfers read-only endpoints (index/show/timeline). Do NOT cache receipt endpoints.
+      urlPattern: /\/api\/mobile\/transfers(\/.+)?$/,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "api-transfers",
+        networkTimeoutSeconds: 3,
+        cacheableResponse: { statuses: [200] },
+        matchOptions: {
+          ignoreSearch: false,
+        },
+      },
+    },
+    {
       urlPattern: /\/api\/mobile\/pricing\/rate-preview.*/,
       handler: "NetworkFirst",
       options: {
