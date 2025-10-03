@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'paths' => ['api/*'],
+    // Include Sanctum CSRF cookie endpoint and your API
+    'paths' => ['sanctum/csrf-cookie', 'api/*'],
 
     // Allow credentials for session cookies across origins
     'supports_credentials' => true,
@@ -18,12 +19,14 @@ return [
         'Accept',
         'Authorization',
         'Idempotency-Key',
+        'X-XSRF-TOKEN', // needed for Sanctum
     ],
 
     'allowed_methods' => ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
 
+    // Exposing Set-Cookie is optional; cookies aren’t readable via JS anyway
     'exposed_headers' => [
-        'Set-Cookie',
+        // 'Set-Cookie',
     ],
 
     'max_age' => 3600,

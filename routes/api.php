@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful as SanctumStateful;
 
 /*
 |--------------------------------------------------------------------------
@@ -13,12 +14,9 @@ use Illuminate\Http\Request;
 */
 
 Route::middleware([
-        'web',
         'throttle:60,1',
         'force.json',
         'idempotency',
-        \Illuminate\Session\Middleware\StartSession::class,
-        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
     ])
     ->prefix('mobile')
     ->group(function () {
@@ -29,27 +27,20 @@ Route::middleware([
     })->name('api.mobile.feature');
 
     // Removed mobile.feature gate for local testing (inline routes below)
-        // Auth - session cookie based
-        Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
-            ->withoutMiddleware([
-                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
-                \App\Http\Middleware\VerifyCsrfToken::class
-            ])
-            ->name('api.mobile.auth.register');
-            
-        Route::post('/auth/login', [\App\Http\Controllers\Api\AuthController::class, 'login'])
-            ->withoutMiddleware([
-                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
-                \App\Http\Middleware\VerifyCsrfToken::class
-            ])
+        // Auth - JWT based
+        Route::post('/auth/login', [\App\Http\Controllers\Api\TokenAuthController::class, 'login'])
             ->name('api.mobile.auth.login');
-            
-        Route::post('/auth/logout', [\App\Http\Controllers\Api\AuthController::class, 'logout'])
-            ->withoutMiddleware([
-                \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
-                \App\Http\Middleware\VerifyCsrfToken::class
-            ])
+        Route::post('/auth/refresh', [\App\Http\Controllers\Api\TokenAuthController::class, 'refresh'])
+            ->name('api.mobile.auth.refresh');
+        Route::post('/auth/logout', [\App\Http\Controllers\Api\TokenAuthController::class, 'logout'])
             ->name('api.mobile.auth.logout');
+        Route::get('/auth/me', [\App\Http\Controllers\Api\TokenAuthController::class, 'me'])
+            ->middleware('auth.jwt')
+            ->name('api.mobile.auth.me');
+
+        // Registration can remain public
+        Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
+            ->name('api.mobile.auth.register');
 
     // Public banks endpoints (reuse existing logic)
     Route::get('/banks', [\App\Http\Controllers\BankController::class, 'list'])->name('api.mobile.banks');
@@ -79,7 +70,7 @@ Route::middleware([
     })->name('api.mobile.health.oxr');
 
         // Authenticated routes
-        Route::middleware(['auth'])->group(function () {
+        Route::middleware(['auth.jwt'])->group(function () {
         // Dashboard
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'summary'])->name('api.mobile.dashboard');
 

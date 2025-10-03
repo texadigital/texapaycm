@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'mobile.feature' => \App\Http\Middleware\MobileFeatureGate::class,
             'force.json' => \App\Http\Middleware\ForceJson::class,
             'idempotency' => \App\Http\Middleware\EnforceIdempotency::class,
+            'auth.jwt' => \App\Http\Middleware\RequireAccessToken::class,
 
         ]);
 
