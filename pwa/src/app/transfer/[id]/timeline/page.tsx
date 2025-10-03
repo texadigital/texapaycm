@@ -59,7 +59,9 @@ export default function TransferTimelinePage() {
             ) : (
               data.timeline.map((t, i) => (
                 <div key={i} className="p-3 text-sm flex items-start justify-between gap-3">
-                  <div className="font-medium">{t.message}</div>
+                  <div className="font-medium">
+                    {t.message?.trim() || (data.payinStatus === 'success' && i === 0 ? 'Pay‑in confirmed' : data.status?.replaceAll('_', ' ') || 'Update')}
+                  </div>
                   <div className="text-xs text-gray-600 whitespace-nowrap">{new Date(t.at).toLocaleString()}</div>
                 </div>
               ))

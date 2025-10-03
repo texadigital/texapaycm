@@ -64,7 +64,14 @@ export default function ConfirmPage() {
       return () => clearInterval(id);
     }
     if (payinStatus === "success" || payinStatus === "completed") {
-      router.replace(`/transfer/${transferId}/timeline`);
+      const qp = new URLSearchParams({
+        bankName,
+        accountName,
+        account: accountNumber,
+        amount: String(amountXaf || 0),
+        receiveMinor: String(receiveMinor || 0),
+      });
+      router.replace(`/transfer/${transferId}/success?${qp.toString()}`);
     }
   }, [transferId, payinStatus]);
 
