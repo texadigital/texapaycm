@@ -55,4 +55,27 @@ class SecurityController extends Controller
         $u->save();
         return response()->json(['success' => true]);
     }
+
+    public function updateToggles(Request $request)
+    {
+        $data = $request->validate([
+            'pinEnabled' => ['nullable','boolean'],
+            'twoFactorEnabled' => ['nullable','boolean'],
+        ]);
+        $u = $request->user();
+        $sec = \App\Models\UserSecuritySetting::firstOrCreate(['user_id' => $u->id]);
+        if (array_key_exists('pinEnabled', $data)) {
+            $sec->pin_enabled = (bool) $data['pinEnabled'];
+        }
+        if (array_key_exists('twoFactorEnabled', $data)) {
+            $sec->two_factor_enabled = (bool) $data['twoFactorEnabled'];
+        }
+        $sec->last_security_update = now();
+        $sec->save();
+        return response()->json(['success' => true, 'settings' => [
+            'pinEnabled' => (bool) $sec->pin_enabled,
+            'twoFactorEnabled' => (bool) $sec->two_factor_enabled,
+            'lastSecurityUpdate' => $sec->last_security_update?->toISOString(),
+        ]]);
+    }
 }

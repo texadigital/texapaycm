@@ -123,6 +123,12 @@ Route::middleware([
 
         // Profile
         Route::get('/profile', [\App\Http\Controllers\Api\ProfileController::class, 'show'])->name('api.mobile.profile.show');
+        // Profile personal info (parity with web routes)
+        Route::get('/profile/personal-info', [\App\Http\Controllers\Api\ProfileController::class, 'personalInfo'])
+            ->name('api.mobile.profile.personal_info');
+        Route::post('/profile/personal-info', [\App\Http\Controllers\Api\ProfileController::class, 'updatePersonalInfo'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.profile.personal_info.update');
         // Security
         Route::get('/profile/security', [\App\Http\Controllers\Api\SecurityController::class, 'show'])->name('api.mobile.profile.security.show');
         Route::post('/profile/security/pin', [\App\Http\Controllers\Api\SecurityController::class, 'updatePin'])
@@ -131,6 +137,9 @@ Route::middleware([
         Route::post('/profile/security/password', [\App\Http\Controllers\Api\SecurityController::class, 'updatePassword'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.profile.security.password');
+        Route::post('/profile/security/toggles', [\App\Http\Controllers\Api\SecurityController::class, 'updateToggles'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.profile.security.toggles');
 
         // Notifications
         Route::get('/profile/notifications', [\App\Http\Controllers\Api\ProfileController::class, 'notifications'])->name('api.mobile.profile.notifications');
@@ -164,6 +173,11 @@ Route::middleware([
 
         // Policies
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
+
+        // Account management
+        Route::post('/account/delete', [\App\Http\Controllers\Api\ProfileController::class, 'deleteAccount'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.account.delete');
 
         // Support (read-only help)
         Route::get('/support/help', [\App\Http\Controllers\Api\SupportController::class, 'help'])->name('api.mobile.support.help');

@@ -50,4 +50,46 @@ class ProfileController extends Controller
         Cache::put($key, $merged, now()->addYear());
         return response()->json(['success' => true, 'preferences' => $merged]);
     }
+
+    // Return editable personal info fields (parity with web personal-info)
+    public function personalInfo(Request $request)
+    {
+        $u = $request->user();
+        return response()->json([
+            'name' => $u->name,
+            'email' => $u->email,
+            'phone' => $u->phone,
+            'notification_email' => $u->notification_email,
+        ]);
+    }
+
+    // Update personal info
+    public function updatePersonalInfo(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['nullable','string','max:255'],
+            'email' => ['nullable','email','max:255'],
+            'notification_email' => ['nullable','email','max:255'],
+        ]);
+        $u = $request->user();
+        foreach ($data as $k => $v) {
+            $u->{$k} = $v;
+        }
+        $u->save();
+        return response()->json(['success' => true, 'user' => [
+            'name' => $u->name,
+            'email' => $u->email,
+            'phone' => $u->phone,
+            'notification_email' => $u->notification_email,
+        ]]);
+    }
+
+    // Account deletion (soft delete)
+    public function deleteAccount(Request $request)
+    {
+        $u = $request->user();
+        // Optional confirmation token/code can be validated here
+        $u->delete();
+        return response()->json(['success' => true, 'message' => 'Account scheduled for deletion.']);
+    }
 }
