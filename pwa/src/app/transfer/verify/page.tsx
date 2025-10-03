@@ -100,7 +100,7 @@ export default function VerifyRecipientPage() {
     const id = setTimeout(() => {
       setLastNEKey(key);
       nameEnquiry.mutate();
-    }, 500); // debounce
+    }, 800); // stronger debounce to avoid rate limits
     return () => clearTimeout(id);
   }, [bankCode, account, lastNEKey]);
 
@@ -198,7 +198,15 @@ export default function VerifyRecipientPage() {
                 <button
                   key={r.bankCode+":"+r.accountNumber}
                   className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
-                  onClick={() => { setBankCode(r.bankCode); setBankName(r.bankName || ""); setAccount(r.accountNumber); if (r.accountName) setNe({ accountName: r.accountName, bankName: r.bankName, success: true }); }}
+                  onClick={() => {
+                    setBankCode(r.bankCode); setBankName(r.bankName || ""); setAccount(r.accountNumber);
+                    if (r.accountName) {
+                      // Optimistic verify
+                      setNe({ accountName: r.accountName, bankName: r.bankName, success: true });
+                      // Silent re-verify in background
+                      setTimeout(() => nameEnquiry.mutate(), 0);
+                    }
+                  }}
                 >
                   {(r.bankName || r.bankCode)} • {r.accountNumber}
                 </button>

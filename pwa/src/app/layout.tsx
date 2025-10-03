@@ -5,6 +5,8 @@ import QueryProvider from "@/components/providers/query-provider";
 import AuthProvider from "@/components/providers/auth-provider";
 import TopBar from "@/components/top-bar";
 import SessionWatcher from "@/components/guards/session-watcher";
+import AuthNoticeProvider from "@/components/providers/auth-notice";
+import AuthNoticeBanner from "@/components/guards/auth-notice-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,9 +36,12 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            <TopBar />
-            <SessionWatcher />
-            {children}
+            <AuthNoticeProvider>
+              <TopBar />
+              <SessionWatcher />
+              <AuthNoticeBanner />
+              {children}
+            </AuthNoticeProvider>
           </AuthProvider>
         </QueryProvider>
       </body>
