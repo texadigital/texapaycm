@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import PageHeader from "@/components/ui/page-header";
@@ -53,11 +54,11 @@ export default function ProfilePage() {
             <div><span className="text-gray-600">KYC:</span> {data.kyc.status} (Level {data.kyc.level})</div>
           ) : null}
           <div className="pt-2">
-            <a className="underline" href="/profile/personal-info">Personal info</a>
+            <Link className="underline" href="/profile/personal-info">Personal info</Link>
             <span className="mx-2 text-gray-400">•</span>
-            <a className="underline" href="/profile/security">Security</a>
+            <Link className="underline" href="/profile/security">Security</Link>
             <span className="mx-2 text-gray-400">•</span>
-            <a className="underline" href="/profile/limits">Limits</a>
+            <Link className="underline" href="/profile/limits">Limits</Link>
           </div>
           <div className="pt-2">
             <button

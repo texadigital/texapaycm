@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { addRecent, loadRecents } from "@/lib/recents";
 import { isUnauthorizedErr } from "@/lib/errors";
@@ -147,7 +148,7 @@ export default function VerifyRecipientPage() {
         <h1 className="text-2xl font-semibold">Verify recipient</h1>
         {unauthorized && (
           <div className="text-sm text-orange-700 border border-orange-200 rounded p-2">
-            Your session has expired. Please <a className="underline" href="/auth/login">log in</a> and try again.
+            Your session has expired. Please <Link className="underline" href="/auth/login">log in</Link> and try again.
           </div>
         )}
         {error ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{error}</div> : null}

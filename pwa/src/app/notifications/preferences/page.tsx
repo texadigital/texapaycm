@@ -3,6 +3,7 @@ import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
+import Link from "next/link";
 import RequireAuth from "@/components/guards/require-auth";
 
 // Shape follows NotificationController@preferences contract
@@ -64,7 +65,7 @@ export default function NotificationPreferencesPage() {
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-xl mx-auto space-y-4">
         <PageHeader title="Notification preferences">
-          <a className="border rounded px-3 py-1" href="/notifications">Back</a>
+          <Link className="border rounded px-3 py-1" href="/notifications">Back</Link>
           <button className="border rounded px-3 py-1" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? "Refreshing..." : "Refresh"}
           </button>

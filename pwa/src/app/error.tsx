@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from "next/link";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   React.useEffect(() => {
@@ -19,7 +20,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
             ) : null}
             <div className="flex items-center justify-center gap-2 pt-2">
               <button className="border rounded px-4 py-2" onClick={() => reset()}>Try again</button>
-              <a className="underline" href="/">Go home</a>
+              <Link className="underline" href="/">Go home</Link>
             </div>
           </div>
         </div>

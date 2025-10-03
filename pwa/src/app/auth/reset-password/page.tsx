@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
 
@@ -78,9 +79,9 @@ export default function ResetPasswordPage() {
             {reset.isPending ? "Resetting..." : "Reset password"}
           </button>
         </form>
-        <p className="text-sm">
-          <a className="underline" href="/auth/login">Back to login</a>
-        </p>
+          <p className="text-sm">
+            <Link href="/auth/login" className="underline">Back to login</Link>
+          </p>
       </div>
     </div>
   );

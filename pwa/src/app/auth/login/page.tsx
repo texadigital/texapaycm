@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import http from "@/lib/api";
 import { validateCameroon, providerMeta, formatForDisplay } from "@/lib/phone";
 import { setAccessToken } from "@/lib/auth";
@@ -125,13 +126,13 @@ export default function LoginPage() {
         </form>
         <div className="text-sm space-y-1">
           <p>
-            <a className="underline" href="/auth/forgot-password">Forgot password?</a>
+            <Link className="underline" href="/auth/forgot-password">Forgot password?</Link>
           </p>
           <p>
-            Have a code? <a className="underline" href="/auth/reset-password">Reset now</a>
+            Have a code? <Link className="underline" href="/auth/reset-password">Reset now</Link>
           </p>
           <p>
-            No account? <a className="underline" href="/auth/register">Create one</a>
+            No account? <Link className="underline" href="/auth/register">Create one</Link>
           </p>
         </div>
       </div>

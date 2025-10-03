@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
 
@@ -53,10 +54,10 @@ export default function ForgotPasswordPage() {
           </button>
         </form>
         <p className="text-sm">
-          Have a code? <a className="underline" href="/auth/reset-password">Reset now</a>
+          Have a code? <Link className="underline" href="/auth/reset-password">Reset now</Link>
         </p>
         <p className="text-sm">
-          <a className="underline" href="/auth/login">Back to login</a>
+          <Link className="underline" href="/auth/login">Back to login</Link>
         </p>
       </div>
     </div>

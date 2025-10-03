@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import PageHeader from "@/components/ui/page-header";
+import Link from "next/link";
 
 export default function SupportHomePage() {
   return (
@@ -11,9 +12,9 @@ export default function SupportHomePage() {
         <div className="border rounded p-3">
           <div className="font-medium mb-1">Help topics</div>
           <ul className="list-disc pl-5 space-y-1 text-gray-700">
-            <li><a className="underline" href="/support/help/getting-started">Getting started</a></li>
-            <li><a className="underline" href="/support/help/limits-and-fees">Limits and fees</a></li>
-            <li><a className="underline" href="/support/help/transfers">Transfers & receipts</a></li>
+            <li><Link className="underline" href="/support/help/getting-started">Getting started</Link></li>
+            <li><Link className="underline" href="/support/help/limits-and-fees">Limits and fees</Link></li>
+            <li><Link className="underline" href="/support/help/transfers">Transfers & receipts</Link></li>
           </ul>
         </div>
         <div className="border rounded p-3">
