@@ -6,21 +6,23 @@ import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
 import { CardSkeleton } from "@/components/ui/skeleton";
 
+type Transfer = { id: number; status: string; amountXaf?: number; createdAt?: string; reference?: string };
+type TransfersRes = { data?: Transfer[]; meta?: { last_page?: number } } & Record<string, any>;
+
 export default function TransfersListPage() {
   const [page, setPage] = React.useState(1);
   const perPage = 20;
 
-  const q = useQuery<{ data: Array<{ id: number; status: string; amountXaf?: number; createdAt?: string; reference?: string }>; meta?: any}>({
+  const q = useQuery<TransfersRes>({
     queryKey: ["transfers", page],
     queryFn: async () => {
       const res = await http.get("/api/mobile/transfers", { params: { page, perPage } });
       return res.data as any;
     },
-    keepPreviousData: true,
   });
 
-  const items = q.data?.data || [];
-  const meta = q.data?.meta || {};
+  const items: Transfer[] = Array.isArray(q.data?.data) ? (q.data?.data as Transfer[]) : [];
+  const meta: { last_page?: number } = (q.data?.meta as any) || {};
 
   return (
     <RequireAuth>
@@ -36,7 +38,7 @@ export default function TransfersListPage() {
           <div className="text-sm text-gray-600 border rounded p-3">No transfers yet.</div>
         ) : (
           <div className="border rounded divide-y">
-            {items.map((t) => (
+            {items.map((t: Transfer) => (
               <a key={t.id} href={`/transfer/${t.id}/timeline`} className="block p-3 text-sm hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div className="font-medium capitalize">{t.status?.replaceAll("_"," ") || "Transfer"}</div>

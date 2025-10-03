@@ -42,6 +42,7 @@ export default function ConfirmPage() {
   const [transferId, setTransferId] = React.useState<number | null>(null);
   const [topError, setTopError] = React.useState<string | null>(null);
   const [payinStatus, setPayinStatus] = React.useState<string | null>(null);
+  const [payoutStatus, setPayoutStatus] = React.useState<string | null>(null);
 
   function formatLimitError(e: any): string {
     const d = e?.response?.data || {};
@@ -72,6 +73,27 @@ export default function ConfirmPage() {
       setPayinStatus(data.transfer.status || "payin_pending");
     },
     onError: (e: any) => setTopError(formatLimitError(e)),
+  });
+
+  // Payout initiation and polling
+  const payout = useMutation({
+    mutationFn: async () => {
+      if (!transferId) return { status: "" } as StatusRes;
+      const res = await http.post(`/api/mobile/transfers/${transferId}/payout`);
+      return res.data as StatusRes;
+    },
+    onSuccess: (d) => setPayoutStatus(d.status || "pending"),
+    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
+  });
+
+  const payoutPoll = useMutation({
+    mutationFn: async () => {
+      if (!transferId) return { status: "" } as StatusRes;
+      const res = await http.post(`/api/mobile/transfers/${transferId}/payout/status`);
+      return res.data as StatusRes;
+    },
+    onSuccess: (d) => setPayoutStatus(d.status || null),
+    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
   });
 
   // Re-quote to refresh rate/expiry using stored recipient
@@ -117,7 +139,13 @@ export default function ConfirmPage() {
       const id = setInterval(() => poll.mutate(), 3000);
       return () => clearInterval(id);
     }
-    if (payinStatus === "success" || payinStatus === "completed") {
+    // When pay-in succeeds, enable payout step (no immediate redirect).
+  }, [transferId, payinStatus]);
+
+  // Redirect to success after payout success
+  React.useEffect(() => {
+    if (!transferId) return;
+    if (payoutStatus === 'success' || payoutStatus === 'completed') {
       const qp = new URLSearchParams({
         bankName,
         accountName,
@@ -127,7 +155,7 @@ export default function ConfirmPage() {
       });
       router.replace(`/transfer/${transferId}/success?${qp.toString()}`);
     }
-  }, [transferId, payinStatus]);
+  }, [transferId, payoutStatus]);
 
   // Load selected quote + recipient from sessionStorage (short URL)
   React.useEffect(() => {
@@ -285,6 +313,22 @@ export default function ConfirmPage() {
                 ) : "Refresh status"}
               </button>
             </div>
+
+            {/* Payout step */}
+            {(payinStatus === 'success' || payinStatus === 'completed') && (
+              <div className="mt-3 border-t pt-3">
+                <div className="mb-2">Payout status: <span className="font-medium capitalize">{payoutStatus || 'not started'}</span></div>
+                {!payoutStatus ? (
+                  <button className="bg-black text-white px-3 py-2 rounded disabled:opacity-50" onClick={() => payout.mutate()} disabled={payout.isPending}>
+                    {payout.isPending ? 'Starting payout…' : 'Initiate payout'}
+                  </button>
+                ) : (
+                  <button className="border rounded px-3 py-2 inline-flex items-center gap-2" onClick={() => payoutPoll.mutate()} disabled={payoutPoll.isPending}>
+                    {payoutPoll.isPending ? 'Checking payout…' : 'Refresh payout status'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
         {confirm.isPending && (

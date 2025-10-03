@@ -54,6 +54,8 @@ export default function ProfilePage() {
           ) : null}
           <div className="pt-2">
             <a className="underline" href="/profile/security">Security settings</a>
+            <span className="mx-2 text-gray-400">•</span>
+            <a className="underline" href="/profile/limits">Limits</a>
           </div>
         </div>
       )}
