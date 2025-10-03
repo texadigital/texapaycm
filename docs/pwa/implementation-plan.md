@@ -282,6 +282,7 @@ Common errors:
   - [x] Auto-refresh on 401 via `POST /api/mobile/auth/refresh` (HttpOnly cookie) and retry once.
   - [x] Global 401 guard + logout UI; protected pages wrapped with `RequireAuth`.
   - [x] User profile fetch (`GET /api/mobile/profile`) and KYC status badge.
+  - [x] Forgot/Reset Password pages in PWA using `POST /api/mobile/auth/forgot-password` and `POST /api/mobile/auth/reset-password`.
 
 - **Phase 2: Banks & Quote Flow**
   - [ ] Banks list, search, favorites.
@@ -313,6 +314,12 @@ Common errors:
   - [ ] Error boundary, empty states, skeletons.
   - [ ] SEO/PWA metadata, icons, splash.
   - [ ] Analytics, logging, Sentry.
+
+Additional PWA parity tasks:
+- [ ] `/transfers` list page using `GET /api/mobile/transfers`.
+- [ ] `/profile` and `/profile/security` pages hooking `GET /api/mobile/profile` and security update endpoints.
+- [ ] `/support/help`, `/support/contact`, `/support/tickets/*` UI (API already exists under `/api/mobile/support/*`).
+- [ ] Payout action UI to call `POST /api/mobile/transfers/{id}/payout` and poll status.
 
 Deliverables per phase: pages, components, and route adapters linking each API endpoint to UI actions.
 

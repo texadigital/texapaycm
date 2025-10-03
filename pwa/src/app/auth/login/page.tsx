@@ -123,9 +123,17 @@ export default function LoginPage() {
             {login.isPending ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <p className="text-sm">
-          No account? <a className="underline" href="/auth/register">Create one</a>
-        </p>
+        <div className="text-sm space-y-1">
+          <p>
+            <a className="underline" href="/auth/forgot-password">Forgot password?</a>
+          </p>
+          <p>
+            Have a code? <a className="underline" href="/auth/reset-password">Reset now</a>
+          </p>
+          <p>
+            No account? <a className="underline" href="/auth/register">Create one</a>
+          </p>
+        </div>
       </div>
     </div>
   );
