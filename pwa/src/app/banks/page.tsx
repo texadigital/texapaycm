@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import http from "@/lib/api";
 import { Card, CardBody } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -18,6 +19,7 @@ type BanksResponse = {
 export default function BanksPage() {
   const [q, setQ] = React.useState("");
   const [refresh, setRefresh] = React.useState(false);
+  const router = useRouter();
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<BanksResponse>({
     queryKey: ["banks", q, refresh],
@@ -29,6 +31,15 @@ export default function BanksPage() {
       return res.data;
     },
     staleTime: 60_000 * 60 * 24, // 24h
+  });
+
+  const favorites = useQuery<BanksResponse>({
+    queryKey: ["banks-favorites"],
+    queryFn: async () => {
+      const res = await http.get('/api/mobile/banks/favorites');
+      return res.data;
+    },
+    staleTime: 60_000 * 60 * 24,
   });
 
   const banks = data?.banks ?? [];
@@ -76,6 +87,24 @@ export default function BanksPage() {
         </div>
       )}
 
+      {/* Favorites */}
+      {favorites.data?.banks?.length ? (
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Recent banks</div>
+          <div className="flex flex-wrap gap-2">
+            {favorites.data.banks.map((b) => (
+              <button
+                key={b.bankCode}
+                className="text-xs border rounded px-2 py-1"
+                onClick={() => router.push(`/transfer/verify?bankCode=${encodeURIComponent(b.bankCode)}&bankName=${encodeURIComponent(b.name)}`)}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="border rounded divide-y">
         {banks.length === 0 ? (
           <Card>
@@ -92,6 +121,11 @@ export default function BanksPage() {
                 {b.aliases && b.aliases.length > 0 ? (
                   <div className="text-xs text-gray-500 mt-1">Aliases: {b.aliases.join(", ")}</div>
                 ) : null}
+                <div className="mt-2">
+                  <button className="text-sm underline" onClick={() => router.push(`/transfer/verify?bankCode=${encodeURIComponent(b.bankCode)}&bankName=${encodeURIComponent(b.name)}`)}>
+                    Use this bank
+                  </button>
+                </div>
               </CardBody>
             </Card>
           ))

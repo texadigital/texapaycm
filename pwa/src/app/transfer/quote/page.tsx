@@ -36,6 +36,24 @@ export default function QuotePage() {
   const [autoRefreshing, setAutoRefreshing] = React.useState(false);
   const [restored, setRestored] = React.useState(false);
 
+  function formatLimitError(e: any): string {
+    const d = e?.response?.data || {};
+    const code = d.code || d.error || "";
+    const msg = d.message || e.message;
+    const min = d.minXaf ?? d.min ?? undefined;
+    const max = d.maxXaf ?? d.max ?? undefined;
+    const remainingDay = d.remainingXafDay ?? d.remainingDay ?? undefined;
+    const remainingMonth = d.remainingXafMonth ?? d.remainingMonth ?? undefined;
+    const parts: string[] = [];
+    if (code) parts.push(`[${code}]`);
+    if (msg) parts.push(String(msg));
+    if (min !== undefined) parts.push(`Minimum: ${min} XAF`);
+    if (max !== undefined) parts.push(`Maximum: ${max} XAF`);
+    if (remainingDay !== undefined) parts.push(`Remaining today: ${remainingDay} XAF`);
+    if (remainingMonth !== undefined) parts.push(`Remaining this month: ${remainingMonth} XAF`);
+    return parts.join(" · ");
+  }
+
   const quote = useMutation({
     mutationFn: async (vars: QuoteReq) => {
       setErr(null);
@@ -43,7 +61,7 @@ export default function QuotePage() {
       return res.data as QuoteRes;
     },
     onSuccess: (d) => setQuoteRes(d),
-    onError: (e: any) => setErr(e?.response?.data?.message || e.message),
+    onError: (e: any) => setErr(formatLimitError(e)),
   });
 
   // Restore saved quote state if same recipient

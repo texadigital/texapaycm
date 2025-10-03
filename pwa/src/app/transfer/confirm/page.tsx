@@ -42,6 +42,24 @@ export default function ConfirmPage() {
   const [topError, setTopError] = React.useState<string | null>(null);
   const [payinStatus, setPayinStatus] = React.useState<string | null>(null);
 
+  function formatLimitError(e: any): string {
+    const d = e?.response?.data || {};
+    const code = d.code || d.error || "";
+    const msg = d.message || e.message;
+    const min = d.minXaf ?? d.min ?? undefined;
+    const max = d.maxXaf ?? d.max ?? undefined;
+    const remainingDay = d.remainingXafDay ?? d.remainingDay ?? undefined;
+    const remainingMonth = d.remainingXafMonth ?? d.remainingMonth ?? undefined;
+    const parts: string[] = [];
+    if (code) parts.push(`[${code}]`);
+    if (msg) parts.push(String(msg));
+    if (min !== undefined) parts.push(`Minimum: ${min} XAF`);
+    if (max !== undefined) parts.push(`Maximum: ${max} XAF`);
+    if (remainingDay !== undefined) parts.push(`Remaining today: ${remainingDay} XAF`);
+    if (remainingMonth !== undefined) parts.push(`Remaining this month: ${remainingMonth} XAF`);
+    return parts.join(" · ");
+  }
+
   const confirm = useMutation({
     mutationFn: async (vars: ConfirmReq) => {
       setTopError(null);
@@ -52,7 +70,7 @@ export default function ConfirmPage() {
       setTransferId(data.transfer.id);
       setPayinStatus(data.transfer.status || "payin_pending");
     },
-    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
+    onError: (e: any) => setTopError(formatLimitError(e)),
   });
 
   // Re-quote to refresh rate/expiry using stored recipient
@@ -88,7 +106,7 @@ export default function ConfirmPage() {
       return res.data as StatusRes;
     },
     onSuccess: (d) => setPayinStatus(d.status || null),
-    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
+    onError: (e: any) => setTopError(formatLimitError(e)),
   });
 
   // Auto-poll every 3s when pending, stop on success/failure

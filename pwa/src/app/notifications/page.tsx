@@ -35,7 +35,7 @@ export default function NotificationsPage() {
       const res = await http.put(`/api/mobile/notifications/${id}/read`);
       return res.data;
     },
-    onSuccess: () => refetch(),
+    onSuccess: () => { refetch(); try { window.dispatchEvent(new CustomEvent('notifications:refresh')); } catch {} },
   });
 
   const markAll = useMutation({
@@ -43,7 +43,7 @@ export default function NotificationsPage() {
       const res = await http.put(`/api/mobile/notifications/read-all`);
       return res.data;
     },
-    onSuccess: () => refetch(),
+    onSuccess: () => { refetch(); try { window.dispatchEvent(new CustomEvent('notifications:refresh')); } catch {} },
   });
 
   return (
