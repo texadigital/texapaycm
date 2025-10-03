@@ -2,6 +2,7 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import http from "@/lib/api";
+import RequireAuth from "@/components/guards/require-auth";
 
 type KycStatusRes = { kyc_status?: string; kyc_level?: number; status?: string; level?: number };
 
@@ -36,7 +37,16 @@ export default function KycPage() {
   const status = data?.kyc_status || data?.status || "—";
   const level = data?.kyc_level ?? data?.level ?? "—";
 
+  // Light polling while status is pending
+  React.useEffect(() => {
+    if (status === 'pending' || status === 'in_progress') {
+      const t = setInterval(() => refetch(), 10_000);
+      return () => clearInterval(t);
+    }
+  }, [status, refetch]);
+
   return (
+    <RequireAuth>
     <div className="min-h-dvh p-6 max-w-xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">KYC</h1>
@@ -82,9 +92,15 @@ export default function KycPage() {
             {webToken.data.expiresAt ? (
               <div>Expires: {new Date(webToken.data.expiresAt).toLocaleString()}</div>
             ) : null}
+            {webToken.data?.url ? (
+              <div className="pt-2">
+                <a className="underline text-blue-600" href={webToken.data.url} target="_blank" rel="noreferrer">Open Smile ID</a>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
     </div>
+    </RequireAuth>
   );
 }
