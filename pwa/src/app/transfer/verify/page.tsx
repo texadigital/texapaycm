@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { addRecent } from "@/lib/recents";
+import { addRecent, loadRecents } from "@/lib/recents";
+import { isUnauthorizedErr } from "@/lib/errors";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import BankPicker, { Bank } from "@/components/banks/bank-picker";
@@ -29,6 +30,7 @@ export default function VerifyRecipientPage() {
   const [suggestBusy, setSuggestBusy] = React.useState(false);
   const [unauthorized, setUnauthorized] = React.useState(false);
   const [lastNEKey, setLastNEKey] = React.useState<string>("");
+  const [mounted, setMounted] = React.useState(false);
 
   const nameEnquiry = useMutation({
     mutationFn: async () => {
@@ -46,7 +48,7 @@ export default function VerifyRecipientPage() {
     onError: (e: any) => {
       const msg = e?.response?.data?.message || e.message;
       setError(msg);
-      if (e?.response?.status === 401) setUnauthorized(true);
+      if (isUnauthorizedErr(e)) setUnauthorized(true);
     },
   });
 
@@ -77,8 +79,9 @@ export default function VerifyRecipientPage() {
           setBankCode(bank.bankCode);
           setBankName(bank.name || "");
         }
-      } catch {
+      } catch (e:any) {
         if (!cancelled) setSuggestions([]);
+        if (isUnauthorizedErr(e)) setUnauthorized(true);
       } finally {
         if (!cancelled) setSuggestBusy(false);
       }
@@ -107,6 +110,27 @@ export default function VerifyRecipientPage() {
     window.addEventListener('auth:unauthorized', onUnauthorized as any);
     return () => window.removeEventListener('auth:unauthorized', onUnauthorized as any);
   }, []);
+
+  // Persist/restore form state
+  React.useEffect(() => {
+    // restore once
+    try {
+      const raw = sessionStorage.getItem('verify:state');
+      if (raw) {
+        const s = JSON.parse(raw) as { bankCode?: string; bankName?: string; account?: string };
+        if (s.bankCode) setBankCode(s.bankCode);
+        if (s.bankName) setBankName(s.bankName);
+        if (s.account) setAccount(s.account);
+      }
+    } catch {}
+    setMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!mounted) return;
+    const s = { bankCode, bankName, account };
+    try { sessionStorage.setItem('verify:state', JSON.stringify(s)); } catch {}
+  }, [mounted, bankCode, bankName, account]);
 
   function goNext() {
     if (!ne?.accountName || !bankCode || !account) return;
@@ -159,12 +183,18 @@ export default function VerifyRecipientPage() {
             <span className="text-gray-600">verified</span>
           </div>
         )}
-        {/* Recent recipients */}
-        {recents.data?.data?.length ? (
+        {/* Recent recipients (API + local MRU) */}
+        {(recents.data?.data?.length || loadRecents().length) ? (
           <div>
             <div className="text-sm font-medium mb-1">Recent recipients</div>
             <div className="flex flex-wrap gap-2">
-              {[...new Map(recents.data.data.map(r => [r.bankCode+":"+r.accountNumber, r])).values()].slice(0,8).map((r) => (
+              {(() => {
+                const fromApi = (recents.data?.data || []).map(r => ({ bankCode: r.bankCode, bankName: r.bankName, accountNumber: r.accountNumber, accountName: r.accountName }));
+                const mergedMap = new Map<string, { bankCode: string; bankName?: string; accountNumber: string; accountName?: string }>();
+                const key = (x: any) => `${x.bankCode}:${x.accountNumber}`;
+                for (const it of loadRecents()) mergedMap.set(key(it), it as any);
+                for (const it of fromApi) mergedMap.set(key(it), it);
+                return Array.from(mergedMap.values()).slice(0,8).map((r) => (
                 <button
                   key={r.bankCode+":"+r.accountNumber}
                   className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
@@ -172,7 +202,8 @@ export default function VerifyRecipientPage() {
                 >
                   {(r.bankName || r.bankCode)} • {r.accountNumber}
                 </button>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         ) : null}
