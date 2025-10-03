@@ -1,7 +1,6 @@
 "use client";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -103,7 +102,7 @@ export default function DashboardPage() {
             ) : (
               <div className="border rounded divide-y">
                 {(data.recentTransfers ?? []).map((t) => (
-                  <Link key={t.id} href={`/transfer/${t.id}/timeline`} className="block p-3">
+                  <div key={t.id} className="p-3 flex items-center justify-between">
                     <div>
                       <div className="font-medium">#{t.id}</div>
                       <div className="text-xs text-gray-600">
@@ -114,7 +113,7 @@ export default function DashboardPage() {
                       <div className="text-sm">{t.amountXaf} XAF</div>
                       <div className="text-xs capitalize text-gray-600">{t.status}</div>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}

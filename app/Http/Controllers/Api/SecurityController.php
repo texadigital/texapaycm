@@ -78,28 +78,4 @@ class SecurityController extends Controller
             'lastSecurityUpdate' => $sec->last_security_update?->toISOString(),
         ]]);
     }
-
-    /**
-     * Verify PIN by phone (no auth) for flows like password reset pre-check.
-     */
-    public function verifyPin(Request $request)
-    {
-        $data = $request->validate([
-            'phone' => ['required','string','max:32'],
-            'pin' => ['required','string','regex:/^\d{4,6}$/'],
-        ]);
-        $phone = \App\Services\PhoneNumberService::normalize($data['phone']);
-        $user = \App\Models\User::where('phone', $phone)->first();
-        if (!$user) {
-            return response()->json(['success' => false, 'code' => 'USER_NOT_FOUND', 'message' => 'No account found.'], 404);
-        }
-        $sec = \App\Models\UserSecuritySetting::firstOrCreate(['user_id' => $user->id]);
-        if (!$sec->pin_enabled || empty($sec->pin_hash)) {
-            return response()->json(['success' => false, 'code' => 'PIN_NOT_ENABLED', 'message' => 'PIN is not enabled for this account.'], 400);
-        }
-        if (!\Illuminate\Support\Facades\Hash::check($data['pin'], $sec->pin_hash)) {
-            return response()->json(['success' => false, 'code' => 'INVALID_PIN', 'message' => 'PIN is incorrect.'], 400);
-        }
-        return response()->json(['success' => true]);
-    }
 }
