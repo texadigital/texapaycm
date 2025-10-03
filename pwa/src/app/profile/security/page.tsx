@@ -41,6 +41,13 @@ export default function SecurityPage() {
   const [topError, setTopError] = React.useState<string | null>(null);
   const [topSuccess, setTopSuccess] = React.useState<string | null>(null);
 
+  const toggles = useMutation({
+    mutationFn: async (vars: { pinEnabled?: boolean; twoFactorEnabled?: boolean }) => {
+      const res = await http.post("/api/mobile/profile/security/toggles", vars);
+      return res.data;
+    },
+  });
+
   return (
     <div className="min-h-dvh p-6 max-w-xl mx-auto space-y-6">
       <PageHeader title="Security" />
@@ -61,6 +68,24 @@ export default function SecurityPage() {
       {topSuccess ? (
         <div className="text-sm text-green-700 border border-green-200 rounded p-2">{topSuccess}</div>
       ) : null}
+
+      {/* Toggles */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Security toggles</h2>
+        <div className="border rounded p-3 text-sm space-y-2">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" defaultChecked={!!data?.pinEnabled} onChange={(e) => toggles.mutate({ pinEnabled: e.currentTarget.checked })} />
+            <span>Enable PIN</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" defaultChecked={!!data?.twoFactorEnabled} onChange={(e) => toggles.mutate({ twoFactorEnabled: e.currentTarget.checked })} />
+            <span>Enable 2FA</span>
+          </label>
+          {data?.lastSecurityUpdate ? (
+            <div className="text-xs text-gray-600">Last update: {new Date(data.lastSecurityUpdate).toLocaleString()}</div>
+          ) : null}
+        </div>
+      </section>
 
       {/* Update PIN */}
       <section className="space-y-3">

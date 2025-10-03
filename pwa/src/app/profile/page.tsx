@@ -53,9 +53,29 @@ export default function ProfilePage() {
             <div><span className="text-gray-600">KYC:</span> {data.kyc.status} (Level {data.kyc.level})</div>
           ) : null}
           <div className="pt-2">
-            <a className="underline" href="/profile/security">Security settings</a>
+            <a className="underline" href="/profile/personal-info">Personal info</a>
+            <span className="mx-2 text-gray-400">•</span>
+            <a className="underline" href="/profile/security">Security</a>
             <span className="mx-2 text-gray-400">•</span>
             <a className="underline" href="/profile/limits">Limits</a>
+          </div>
+          <div className="pt-2">
+            <button
+              className="text-sm text-red-600 underline"
+              onClick={async () => {
+                if (!confirm('Are you sure you want to delete your account? This cannot be undone.')) return;
+                try {
+                  await http.post('/api/mobile/account/delete');
+                  // Best-effort sign-out: clear token and redirect to login
+                  try { sessionStorage.removeItem('access_token'); } catch{}
+                  window.location.href = '/auth/login';
+                } catch (e: any) {
+                  alert(e?.response?.data?.message || e.message || 'Failed to delete account');
+                }
+              }}
+            >
+              Delete my account
+            </button>
           </div>
         </div>
       )}
