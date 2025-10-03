@@ -294,6 +294,12 @@ export default function ConfirmPage() {
           <div className="border rounded p-3 text-sm space-y-2">
             <div>Transfer ID: <span className="font-mono">{transferId}</span></div>
             <div>Status: <span className="font-medium capitalize">{payinStatus || "—"}</span></div>
+            <div className="text-gray-700">If prompted by your operator, dial the USSD to approve:
+              <ul className="list-disc pl-5">
+                <li>MTN: *126#</li>
+                <li>Orange: *150#</li>
+              </ul>
+            </div>
             <div>
               <button className="border rounded px-3 py-2 inline-flex items-center gap-2" onClick={() => poll.mutate()} disabled={poll.isPending}>
                 {poll.isPending ? (

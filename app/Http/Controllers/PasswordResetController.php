@@ -329,6 +329,7 @@ class PasswordResetController extends Controller
     {
         $request->validate([
             'phone' => 'required|string|max:32',
+            'pin' => ['nullable','string','regex:/^\d{4,6}$/'],
         ]);
 
         try {
@@ -341,6 +342,33 @@ class PasswordResetController extends Controller
                     'success' => false,
                     'message' => 'No account found with this phone number.',
                 ], 404);
+            }
+
+            // If user has PIN enabled, require correct PIN before sending reset code
+            try {
+                $settings = $user->securitySettings;
+                if ($settings && $settings->pin_enabled && !empty($settings->pin_hash)) {
+                    $providedPin = (string) ($request->input('pin') ?? '');
+                    if ($providedPin === '' || !\Illuminate\Support\Facades\Hash::check($providedPin, $settings->pin_hash)) {
+                        return response()->json([
+                            'success' => false,
+                            'code' => 'PIN_REQUIRED',
+                            'message' => 'PIN is required to reset this account password.',
+                        ], 403);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback: check legacy user pin_hash if present
+                if (!empty($user->pin_hash)) {
+                    $providedPin = (string) ($request->input('pin') ?? '');
+                    if ($providedPin === '' || !\Illuminate\Support\Facades\Hash::check($providedPin, $user->pin_hash)) {
+                        return response()->json([
+                            'success' => false,
+                            'code' => 'PIN_REQUIRED',
+                            'message' => 'PIN is required to reset this account password.',
+                        ], 403);
+                    }
+                }
             }
 
             // Generate reset code (6 digits)

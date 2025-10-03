@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [pin, setPin] = React.useState("");
+  const [needPin, setNeedPin] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   // No CSRF needed for JWT login
@@ -32,7 +33,7 @@ export default function LoginPage() {
         {
           phone: v.normalized,
           password,
-          pin: pin || undefined,
+          pin: needPin ? (pin || undefined) : undefined,
         },
         {
           withCredentials: true,
@@ -45,6 +46,12 @@ export default function LoginPage() {
       return data;
     },
     onError: (e: any) => {
+      const code = e?.response?.data?.code;
+      if (code === 'PIN_REQUIRED') {
+        setNeedPin(true);
+        setError("PIN required. Enter your 4-6 digit PIN to continue.");
+        return;
+      }
       const msg = e?.response?.data?.message || e.message || "Login failed";
       setError(msg);
     },
@@ -101,21 +108,22 @@ export default function LoginPage() {
               required
             />
           </div>
-          <div>
-            <label className="block text-sm mb-1">PIN (if required)</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              inputMode="numeric"
-              type="password"
-              autoComplete="one-time-code"
-              // Use a browser-compatible pattern; only validated when not empty
-              pattern="[0-9]{4,6}"
-              placeholder="4-6 digits"
-              aria-invalid={false}
-            />
-          </div>
+          {needPin && (
+            <div>
+              <label className="block text-sm mb-1">PIN</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                inputMode="numeric"
+                type="password"
+                autoComplete="one-time-code"
+                pattern="[0-9]{4,6}"
+                placeholder="4-6 digits"
+                required
+              />
+            </div>
+          )}
           <button
             type="submit"
             className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
