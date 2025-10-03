@@ -2,6 +2,7 @@
 import React from "react";
 import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
+import { validateCameroon, providerMeta, formatForDisplay } from "@/lib/phone";
 import { setAccessToken } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -15,10 +16,15 @@ export default function LoginPage() {
   const login = useMutation({
     mutationFn: async () => {
       setError(null);
+      // Validate & normalize phone before sending
+      const v = validateCameroon(phone);
+      if (!v.valid) {
+        throw new Error(v.error || "Invalid phone number");
+      }
       const res = await http.post(
         "/api/mobile/auth/login",
         {
-          phone,
+          phone: v.normalized,
           password,
           pin: pin || undefined,
         },
@@ -63,9 +69,21 @@ export default function LoginPage() {
               className="w-full border rounded px-3 py-2"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+2376..."
+              placeholder="2376XXXXXXXX"
               required
             />
+            {(() => {
+              const v = validateCameroon(phone);
+              const meta = providerMeta(v.provider);
+              return (
+                <div className="mt-1 flex items-center gap-2 text-xs">
+                  <span className="text-gray-600">{formatForDisplay(phone)}</span>
+                  {meta ? (
+                    <span className={`px-2 py-0.5 rounded ${meta.color}`}>{meta.label}</span>
+                  ) : null}
+                </div>
+              );
+            })()}
           </div>
           <div>
             <label className="block text-sm mb-1">Password</label>

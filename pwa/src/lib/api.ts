@@ -9,6 +9,8 @@ export const http: AxiosInstance = axios.create({
   // If BASE_URL is empty, axios will use same-origin relative URLs
   baseURL: BASE_URL,
   withCredentials: true,
+  // More tolerant timeout for tunnels (ngrok) and first-time warmups
+  timeout: 30000,
   headers: {
     'Accept': 'application/json',
     'Content-Type': 'application/json',

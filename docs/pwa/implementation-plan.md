@@ -2,16 +2,15 @@
 
 ## 1) Overview
 
-- **Stack**: Next.js (App Router) + TypeScript + Tailwind CSS + TanStack Query + next-pwa + Axios/Fetch
-- **Auth strategy (planned)**: Sanctum cookie-based auth with SameSite=None;Secure for cross-origin PWA; session cookie fallback supported during migration.
+- **Stack**: Next.js (App Router) + TypeScript + Tailwind CSS + TanStack Query + next-pwa + Axios
+- **Auth strategy (current)**: Stateless JWT access tokens (short TTL) + rotating refresh tokens (long TTL, HttpOnly cookie). Mobile API authenticates with `Authorization: Bearer <token>`; refresh via cookie.
 - **Goals**:
-  - Deliver a performant PWA for mobile and desktop that consumes the existing mobile JSON API under `routes/api.php`.
-  - Preserve current server-side logic and data contracts. Avoid breaking changes to existing mobile clients.
-  - Add offline-first capabilities for read endpoints and resilient write flows with idempotency.
+  - Deliver a performant PWA for mobile and desktop that consumes the mobile JSON API under `routes/api.php`.
+  - Preserve existing server-side data contracts while moving auth to JWT.
+  - Add offline-first capabilities for reads and resilient writes with idempotency.
 - **Assumptions**:
-  - Current backend uses Laravel 12 with web-session auth. Mobile API endpoints are under `/api/mobile/*` and grouped with `web`, `force.json`, `idempotency`, and `throttle` middlewares.
-  - CSRF is explicitly disabled on several POST endpoints for the mobile API. `auth` middleware protects authenticated routes using session cookies.
-  - No Sanctum wiring is present yet. We will add Sanctum for PWA to avoid relying on disabling CSRF for browser clients.
+  - Backend: Laravel 12. Mobile API endpoints live under `/api/mobile/*` with middlewares: `throttle`, `force.json`, `idempotency`. Authenticated routes use `auth.jwt` middleware.
+  - Admin web/Filament remains session-based under `routes/web.php` and `/admin`.
 
 ### UI/UX References (visual samples only)
 - Source directory: `/Users/macbookpro/Downloads/TEXA (3)/`
@@ -48,16 +47,17 @@ References:
 
 Legend:
 - MW = middlewares in addition to the group-level middlewares.
-- Group-level middlewares (all routes below): `web`, `throttle:60,1`, `force.json`,
-  `idempotency`, `StartSession`, `ShareErrorsFromSession`. Authenticated section additionally
-  has `auth` (web guard, session driver).
+- Group-level middlewares (all routes below): `throttle:60,1`, `force.json`, `idempotency`.
+- Authenticated section additionally uses `auth.jwt` (stateless JWT middleware).
 
 | Method | Path | Controller@Action | Middleware | Auth/Guard | Notes |
 |---|---|---|---|---|---|
 | GET | /api/mobile/feature | closure | - | none | Returns `{ enabled: true }` for local testing.
-| POST | /api/mobile/auth/register | Api\AuthController@register | without CSRF | web | Creates user, logs in via session.
-| POST | /api/mobile/auth/login | Api\AuthController@login | without CSRF | web | Session login; optional PIN challenge.
-| POST | /api/mobile/auth/logout | Api\AuthController@logout | without CSRF | web | Logout, invalidate session.
+| POST | /api/mobile/auth/register | Api\AuthController@register | - | none | Creates user (registration kept public).
+| POST | /api/mobile/auth/login | Api\TokenAuthController@login | - | jwt | Issues access token + sets HttpOnly refresh cookie; optional PIN challenge.
+| POST | /api/mobile/auth/refresh | Api\TokenAuthController@refresh | - | cookie | Rotates refresh token (cookie) and returns new access token.
+| POST | /api/mobile/auth/logout | Api\TokenAuthController@logout | - | cookie | Revokes refresh token and clears cookie.
+| GET  | /api/mobile/auth/me | Api\TokenAuthController@me | auth.jwt | jwt | Returns current user summary.
 | GET | /api/mobile/banks | BankController@list | - | none | Public banks list (cached). `?refresh=1`, `?q`.
 | GET | /api/mobile/banks/favorites | BankController@favorites | - | none | From session recent banks.
 | POST | /api/mobile/banks/suggest | BankController@suggest | without CSRF | none | Name enquiry shortlist; suggestions.
@@ -65,45 +65,44 @@ Legend:
 | GET | /api/mobile/health/safehaven | closure | - | none | SafeHaven auth check.
 | GET | /api/mobile/health/safehaven/banks | closure | - | none | SafeHaven bank list raw.
 | GET | /api/mobile/health/oxr | closure | - | none | OpenExchangeRates fetched rates.
-| GET | /api/mobile/dashboard | Api\DashboardController@summary | - | web | KYC, stats, recent transfers.
-| POST | /api/mobile/kyc/smileid/start | Kyc\SmileIdController@start | without CSRF | web | Starts Smile ID session (flagged).
-| POST | /api/mobile/kyc/smileid/web-token | Kyc\SmileIdController@webToken | without CSRF | web | Smile ID web token or fallback.
-| GET | /api/mobile/kyc/status | Kyc\KycController@status | - | web | KYC status/level.
-| GET | /api/mobile/transfers | Api\TransfersController@index | - | web | Paginated list; filters.
-| GET | /api/mobile/transfers/{transfer} | Api\TransfersController@show | - | web | Ownership enforced.
-| POST | /api/mobile/transfers/name-enquiry | Api\TransfersController@nameEnquiry | without CSRF, throttle:20,1 | web | Requires Idempotency-Key (MW).
-| POST | /api/mobile/transfers/quote | Api\TransfersController@quote | without CSRF, throttle:20,1, check.limits | web | Requires Idempotency-Key; creates Quote.
-| POST | /api/mobile/transfers/confirm | Api\TransfersController@confirm | without CSRF, throttle:20,1, check.limits | web | Requires Idempotency-Key; pay-in.
-| POST | /api/mobile/transfers/{transfer}/payin/status | Api\TransfersController@payinStatus | without CSRF | web | Poll pay-in; state transitions.
-| POST | /api/mobile/transfers/{transfer}/payout | Api\TransfersController@initiatePayout | without CSRF | web | Server idempotency per-transfer.
-| POST | /api/mobile/transfers/{transfer}/payout/status | Api\TransfersController@payoutStatus | without CSRF | web | Poll payout.
-| GET | /api/mobile/transfers/{transfer}/timeline | Api\TransfersController@timeline | - | web | Timeline/status.
-| GET | /api/mobile/transfers/{transfer}/receipt-url | Api\TransfersController@receiptUrl | - | web | Signed URL to receipt.
-| GET | /api/mobile/transfers/{transfer}/receipt.pdf | Api\TransfersController@receiptPdf | - | web | Signed URL to PDF if enabled.
-| GET | /api/mobile/pricing/limits | Api\PricingController@limits | - | web | Min/max, caps, remaining.
-| GET | /api/mobile/pricing/rate-preview | Api\PricingController@preview | - | web | Pricing preview for amountXaf.
+| GET | /api/mobile/dashboard | Api\DashboardController@summary | auth.jwt | jwt | KYC, stats, recent transfers (15s cache).
+| POST | /api/mobile/kyc/smileid/start | Kyc\SmileIdController@start | auth.jwt | jwt | Starts Smile ID session.
+| POST | /api/mobile/kyc/smileid/web-token | Kyc\SmileIdController@webToken | auth.jwt | jwt | Smile ID web token or fallback.
+| GET | /api/mobile/kyc/status | Kyc\KycController@status | auth.jwt | jwt | KYC status/level.
+| GET | /api/mobile/transfers | Api\TransfersController@index | auth.jwt | jwt | Paginated list; filters.
+| GET | /api/mobile/transfers/{transfer} | Api\TransfersController@show | auth.jwt | jwt | Ownership enforced.
+| POST | /api/mobile/transfers/name-enquiry | Api\TransfersController@nameEnquiry | throttle:20,1 | jwt | Requires Idempotency-Key (MW).
+| POST | /api/mobile/transfers/quote | Api\TransfersController@quote | throttle:20,1, check.limits | jwt | Requires Idempotency-Key; creates Quote.
+| POST | /api/mobile/transfers/confirm | Api\TransfersController@confirm | throttle:20,1, check.limits | jwt | Requires Idempotency-Key; pay-in.
+| POST | /api/mobile/transfers/{transfer}/payin/status | Api\TransfersController@payinStatus | - | jwt | Poll pay-in; state transitions.
+| POST | /api/mobile/transfers/{transfer}/payout | Api\TransfersController@initiatePayout | - | jwt | Server idempotency per-transfer.
+| POST | /api/mobile/transfers/{transfer}/payout/status | Api\TransfersController@payoutStatus | - | jwt | Poll payout.
+| GET | /api/mobile/transfers/{transfer}/timeline | Api\TransfersController@timeline | auth.jwt | jwt | Timeline/status.
+| GET | /api/mobile/transfers/{transfer}/receipt-url | Api\TransfersController@receiptUrl | auth.jwt | jwt | Signed URL to receipt.
+| GET | /api/mobile/transfers/{transfer}/receipt.pdf | Api\TransfersController@receiptPdf | auth.jwt | jwt | Signed URL to PDF if enabled.
+| GET | /api/mobile/pricing/limits | Api\PricingController@limits | auth.jwt | jwt | Min/max, caps, remaining.
+| GET | /api/mobile/pricing/rate-preview | Api\PricingController@preview | auth.jwt | jwt | Pricing preview for amountXaf.
 | GET | /api/mobile/profile | Api\ProfileController@show | - | web | Basic user + KYC profile.
 | GET | /api/mobile/profile/security | Api\SecurityController@show | - | web | Pin/twoFactor flags.
 | POST | /api/mobile/profile/security/pin | Api\SecurityController@updatePin | without CSRF | web | Requires Idempotency-Key (MW).
 | POST | /api/mobile/profile/security/password | Api\SecurityController@updatePassword | without CSRF | web | Requires Idempotency-Key.
 | GET | /api/mobile/profile/notifications | Api\ProfileController@notifications | - | web | Cached notification preferences.
 | PUT | /api/mobile/profile/notifications | Api\ProfileController@updateNotifications | without CSRF | web | Requires Idempotency-Key.
-| GET | /api/mobile/notifications | NotificationController@index | - | web | Paginated notifications.
-| GET | /api/mobile/notifications/summary | NotificationController@summary | - | web | Unread count + recent.
-| PUT | /api/mobile/notifications/{notification}/read | NotificationController@markAsRead | without CSRF | web | Mark one read (ownership).
-| PUT | /api/mobile/notifications/read-all | NotificationController@markAllAsRead | without CSRF | web | Mark all read.
-| GET | /api/mobile/notifications/preferences | NotificationController@preferences | - | web | Per-type prefs.
-| PUT | /api/mobile/notifications/preferences | NotificationController@updatePreferences | without CSRF | web | Update per-type prefs.
-| POST | /api/mobile/devices/register | Api\DeviceController@register | - | web | Register FCM token.
-| DELETE | /api/mobile/devices/unregister | Api\DeviceController@unregister | - | web | Deactivate device token.
-| GET | /api/mobile/devices | Api\DeviceController@devices | - | web | List active devices.
-| POST | /api/mobile/devices/test-push | Api\DeviceController@testPush | - | web | Send test notification.
-| POST | /api/mobile/auth/forgot-password | PasswordResetController@apiSendResetCode | - | web | Send reset code via SMS/push.
-| POST | /api/mobile/auth/reset-password | PasswordResetController@apiResetPassword | - | web | Verify code and reset password.
+| GET | /api/mobile/notifications | NotificationController@index | auth.jwt | jwt | Paginated notifications.
+| GET | /api/mobile/notifications/summary | NotificationController@summary | auth.jwt | jwt | Unread count + recent.
+| PUT | /api/mobile/notifications/{notification}/read | NotificationController@markAsRead | - | jwt | Mark one read (ownership).
+| PUT | /api/mobile/notifications/read-all | NotificationController@markAllAsRead | - | jwt | Mark all read.
+| GET | /api/mobile/notifications/preferences | NotificationController@preferences | auth.jwt | jwt | Per-type prefs.
+| PUT | /api/mobile/notifications/preferences | NotificationController@updatePreferences | - | jwt | Update per-type prefs.
+| POST | /api/mobile/devices/register | Api\DeviceController@register | auth.jwt | jwt | Register FCM token.
+| DELETE | /api/mobile/devices/unregister | Api\DeviceController@unregister | auth.jwt | jwt | Deactivate device token.
+| GET | /api/mobile/devices | Api\DeviceController@devices | auth.jwt | jwt | List active devices.
+| POST | /api/mobile/devices/test-push | Api\DeviceController@testPush | auth.jwt | jwt | Send test notification.
+| POST | /api/mobile/auth/forgot-password | PasswordResetController@apiSendResetCode | - | none | Send reset code via SMS/push.
+| POST | /api/mobile/auth/reset-password | PasswordResetController@apiResetPassword | - | none | Verify code and reset password.
 | GET | /enable-mobile-api | closure | web | One-off route to enable feature flag.
 
 Notes:
-- Feature flag enforcement inside controllers: many mobile endpoints check `AdminSetting::getValue('mobile_api_enabled', false)` and return `403 FEATURE_DISABLED` if off.
 - `force.json` enforces JSON Accept and converts redirects to `401 UNAUTHENTICATED` JSON.
 - `idempotency` middleware (`EnforceIdempotency`) requires `Idempotency-Key` for specific routes and caches JSON responses.
 - Transfers also implement an internal idempotency wrapper for mobile API within `Api\TransfersController`.
@@ -271,17 +270,18 @@ Common errors:
 
 ## 4) Phased Build Plan (Milestones, Deliverables)
 
-- **Phase 0: Backend readiness**
-  - [ ] Enable CORS and cookie settings for PWA origin.
-  - [ ] Add Laravel Sanctum; expose `/sanctum/csrf-cookie`; configure session domain and SameSite=None.
-  - [ ] Keep existing session-based mobile API functional during transition.
-  - [ ] Confirm `idempotency` middleware coverage meets PWA write needs.
+- **Phase 0: Backend readiness (JWT)**
+  - [x] Implement JWT access tokens + rotating refresh tokens (`TokenAuthController`, `RequireAccessToken`, `JwtService`).
+  - [x] Protect mobile API with `auth.jwt`; keep Filament admin session-based.
+  - [x] Confirm `idempotency` middleware coverage meets PWA write needs.
+  - [x] Add DB table `refresh_tokens` (hashed) and indexes for dashboard speed.
 
 - **Phase 1: Auth & Shell**
-  - [ ] App shell, routing, layout, theme (Tailwind).
-  - [ ] Sanctum login via `POST /api/mobile/auth/login` or dedicated Sanctum auth if added.
-  - [ ] Session/CSRF negotiation: call `/sanctum/csrf-cookie`, then login; store session cookie.
-  - [ ] User profile fetch (`GET /api/mobile/profile`) and kyc status badge.
+  - [x] App shell, routing, layout, theme (Tailwind).
+  - [x] JWT login via `POST /api/mobile/auth/login`; store access token in memory/sessionStorage (not localStorage).
+  - [x] Auto-refresh on 401 via `POST /api/mobile/auth/refresh` (HttpOnly cookie) and retry once.
+  - [x] Global 401 guard + logout UI; protected pages wrapped with `RequireAuth`.
+  - [x] User profile fetch (`GET /api/mobile/profile`) and KYC status badge.
 
 - **Phase 2: Banks & Quote Flow**
   - [ ] Banks list, search, favorites.
@@ -335,7 +335,7 @@ Mapping API → PWA Pages/Components (high level):
 - **Banks list (`GET /api/mobile/banks`)**: Cache-first with 24h revalidation. Seed from server cache; support `?refresh=1` for manual refresh.
 - **Rate preview (`GET /api/mobile/pricing/rate-preview`)**: Network-first; short client cache (30–60s) to avoid stale quotes.
 - **Pricing limits**: Cache 5–10 minutes; invalidate on auth changes.
-- **Dashboard summary**: Network-first; background revalidation every app focus.
+- **Dashboard summary**: Network-first; server micro-cache 15s; background revalidation.
 - **Transfers index/show/timeline**: Network-first with optimistic timeline updates after actions; cache recent pages for offline viewing.
 - **Receipt URL/PDF**: Do not cache responses; open signed URLs directly.
 - **Notifications**: Cache-first for list and summary with revalidate-on-focus; mark-as-read mutations invalidate queries.
@@ -350,13 +350,12 @@ Idempotency in PWA:
 
 ## 6) Security Posture
 
-- **Auth mode today**: web session cookies with `auth` middleware. Many mobile POST routes disable CSRF. PWA should not rely on CSRF-disabled endpoints for browser security.
-- **Recommended**: Add Laravel Sanctum for SPA auth with CSRF protection. Flow: GET `/sanctum/csrf-cookie` → POST login → protected requests with session cookie and XSRF-TOKEN header automatically.
-- **CORS**: Enable CORS for PWA origin; allow credentials; set `Access-Control-Allow-Credentials: true`; restrict origins.
-- **Cookies**: `SameSite=None; Secure` for cross-origin; set domain to apex where needed; ensure HTTPS.
-- **Idempotency**: Required by middleware for key write routes. Client must always send `Idempotency-Key` for those.
-- **Rate limits**: Group `throttle:60,1` plus specific `throttle:20,1` on transfers name-enquiry/quote/confirm.
-- **Sensitive data**: Mask PIN/password fields in logs; ensure PWA never stores secrets in localStorage; rely on httpOnly cookies.
+- **Auth mode**: Stateless JWT access tokens (short TTL) signed HS256 + rotating refresh tokens (stored hashed in DB). Access token in memory/sessionStorage; refresh in HttpOnly, Secure, SameSite=Strict cookie.
+- **CORS**: Prefer same-origin via reverse proxy. If cross-origin, allow credentials and restrict origins.
+- **Cookies**: Host-only domain; Path `/`; HttpOnly; Secure; SameSite=Strict.
+- **Idempotency**: Required by middleware for specific write routes. Client always sends `Idempotency-Key` and retries safely.
+- **Rate limits**: Group `throttle:60,1` plus specific `throttle:20,1` on transfers.
+- **Sensitive data**: Never store tokens in localStorage; PIN/password masked; refresh token never stored client-side.
 - **Authorization checks**: Transfer and Ticket routes enforce ownership server-side.
 
 ---
@@ -376,10 +375,22 @@ Idempotency in PWA:
 
 ## 8) Open Questions
 
-- Do we approve adding Laravel Sanctum and enabling CSRF for browser clients on mobile API endpoints, or should we create a parallel `/api/pwa/*` namespace?
-- What are the intended PWA and API origins/domains (for CORS/cookie domain)?
-- Should we keep `/api/mobile/*` path for the PWA, or alias to `/api/pwa/*`?
+- HS256 vs RS256 for JWT? Current: HS256. Any need for key rotation/public verification (RS256)?
+- PWA and API origins/domains (for CORS/cookie domain) in staging/production?
+- Keep `/api/mobile/*` as public contract, or add `/api/pwa/*` aliases?
 - Any additional feature flags required (e.g., toggle PDF/Share features for PWA separately)?
-- Expected polling intervals and SLA for pay-in/payout status? Can we adopt server-sent events or webhooks→push for real-time updates?
-- Do we need multi-language support in the PWA at launch?
-- Which analytics and crash reporting providers should we integrate (e.g., GA4, Sentry)?
+- Expected polling intervals and SLA for pay-in/payout status? Consider push/SSE for real-time updates.
+- Multi-language support at launch?
+- Analytics and crash reporting providers (GA4, Sentry)?
+
+---
+
+## 9) Production Run Notes
+
+- Build and run Next.js in production for demos:
+  - `npm --prefix pwa run build`
+  - `npm --prefix pwa run start` (defaults to port 3000)
+  - `php artisan serve --host=127.0.0.1 --port=8000`
+  - `npm run proxy` (fronts both on http://localhost:3005)
+- Point ngrok at `http://localhost:3005` for a single public origin.
+- This removes dev/HMR overhead and is noticeably faster over tunnels.

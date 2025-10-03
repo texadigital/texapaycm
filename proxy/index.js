@@ -64,9 +64,9 @@ app.use('/verify-reset', toLaravel('/verify-reset'));
 app.use('/forgot-password', toLaravel('/forgot-password'));
 app.use('/reset-password', toLaravel('/reset-password'));
 app.use('/webhooks', toLaravel('/webhooks'));
-app.use('/kyc', toLaravel('/kyc'));
+// Frontend app routes like /kyc and /transfer are served by Next.js.
+// Do NOT proxy them to Laravel or we will get 404 from Laravel.
 app.use('/s', toLaravel('/s'));
-app.use('/transfer', toLaravel('/transfer'));
 app.use('/health', toLaravel('/health'));
 // Add specific non-prefixed Laravel pages if needed in future
 

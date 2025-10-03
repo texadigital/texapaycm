@@ -36,13 +36,14 @@ class TokenAuthController extends Controller
 
     private function setRefreshCookie(string $rawToken)
     {
-        // HttpOnly, Secure, Strict; scoped to refresh endpoint path
+        // Host-only cookie (domain = null) so it matches current host (e.g., ngrok).
+        // Path '/' so it is sent to the refresh endpoint and other API paths if needed.
         $cookie = cookie(
             name: 'refresh_token',
             value: $rawToken,
             minutes: 60 * 24 * 60, // 60 days
-            path: '/api/mobile/auth/refresh',
-            domain: config('session.domain'),
+            path: '/',
+            domain: null,
             secure: true,
             httpOnly: true,
             sameSite: 'strict'
@@ -137,8 +138,8 @@ class TokenAuthController extends Controller
             $hash = hash('sha256', $raw);
             RefreshToken::where('token_hash', $hash)->update(['revoked_at' => now()]);
         }
-        // Clear cookie
-        cookie()->queue(cookie('refresh_token', '', -60, '/api/mobile/auth/refresh', config('session.domain'), true, true, false, 'strict'));
+        // Clear cookie (must match scope used when setting it)
+        cookie()->queue(cookie('refresh_token', '', -60, '/', null, true, true, false, 'strict'));
         return response()->json(['success' => true]);
     }
 
