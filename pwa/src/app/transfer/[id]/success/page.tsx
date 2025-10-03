@@ -84,6 +84,13 @@ export default function TransferSuccessPage() {
     return () => clearInterval(t);
   }, [id, payoutStatus]);
 
+  // Notify other pages (dashboard) when payout is completed to refresh their data
+  React.useEffect(() => {
+    if ((payoutStatus || data?.payoutStatus) === 'success') {
+      try { window.dispatchEvent(new CustomEvent('transfers:refresh')); } catch {}
+    }
+  }, [payoutStatus, data?.payoutStatus]);
+
   const receiveNgn = (receiveMinor || 0) / 100;
 
   return (

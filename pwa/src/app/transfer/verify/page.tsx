@@ -171,11 +171,17 @@ export default function VerifyRecipientPage() {
             {suggestBusy && <div className="text-xs text-gray-500 mt-1">Checking bank suggestions…</div>}
           </div>
         </div>
-        <div>
-          <button className="bg-black text-white px-4 py-2 rounded" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending || !bankCode || !account}>
-            {nameEnquiry.isPending ? "Verifying…" : "Verify account"}
-          </button>
-        </div>
+        {!ne?.accountName ? (
+          <div>
+            <button className="bg-black text-white px-4 py-2 rounded" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending || !bankCode || !account}>
+              {nameEnquiry.isPending ? "Verifying…" : "Verify account"}
+            </button>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-600">
+            Verified automatically. <button className="underline" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending}>Verify again</button>
+          </div>
+        )}
         {ne?.accountName && (
           <div className="border rounded p-3 text-sm flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-blue-600" />

@@ -35,6 +35,19 @@ export default function DashboardPage() {
     retry: 1,
   });
 
+  // Auto-refresh when success page broadcasts completion
+  React.useEffect(() => {
+    const onRefresh = () => refetch();
+    window.addEventListener('transfers:refresh', onRefresh as any);
+    // Also refresh when the tab regains focus (but only do a single refetch here)
+    const onFocus = () => refetch();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('transfers:refresh', onRefresh as any);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refetch]);
+
   return (
     <RequireAuth>
     <div className="min-h-dvh p-6 max-w-3xl mx-auto space-y-6">

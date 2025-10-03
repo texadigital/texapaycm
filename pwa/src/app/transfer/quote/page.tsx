@@ -33,6 +33,8 @@ export default function QuotePage() {
   const [quoteRes, setQuoteRes] = React.useState<QuoteRes | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [ttlSec, setTtlSec] = React.useState(0);
+  const [autoRefreshing, setAutoRefreshing] = React.useState(false);
+  const [restored, setRestored] = React.useState(false);
 
   const quote = useMutation({
     mutationFn: async (vars: QuoteReq) => {
@@ -43,6 +45,28 @@ export default function QuotePage() {
     onSuccess: (d) => setQuoteRes(d),
     onError: (e: any) => setErr(e?.response?.data?.message || e.message),
   });
+
+  // Restore saved quote state if same recipient
+  React.useEffect(() => {
+    if (restored) return;
+    try {
+      const raw = sessionStorage.getItem('quote:state');
+      if (raw) {
+        const s = JSON.parse(raw) as { amount?: number; bankCode?: string; account?: string };
+        if (s && s.bankCode === bankCode && s.account === account && typeof s.amount === 'number' && s.amount > 0) {
+          setAmount(s.amount);
+        }
+      }
+    } catch {}
+    setRestored(true);
+  }, [restored, bankCode, account]);
+
+  // Persist state
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem('quote:state', JSON.stringify({ amount, bankCode, account }));
+    } catch {}
+  }, [amount, bankCode, account]);
 
   // Debounce quote while typing
   React.useEffect(() => {
@@ -63,24 +87,36 @@ export default function QuotePage() {
     return () => clearInterval(id);
   }, [quoteRes?.quote?.expiresAt]);
 
+  // Auto re-quote when expired to restart countdown with latest rate
+  React.useEffect(() => {
+    if (!quoteRes || !amount || !bankCode || !account) return;
+    if (ttlSec > 0) { setAutoRefreshing(false); return; }
+    if (quote.isPending || autoRefreshing) return;
+    setAutoRefreshing(true);
+    quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account }, {
+      onSettled: () => setAutoRefreshing(false),
+    });
+  }, [ttlSec, quoteRes, amount, bankCode, account]);
+
   function proceed() {
     if (!quoteRes?.quote) return;
+    // Persist selected quote + recipient for confirm page (short URL)
+    try {
+      const payload = {
+        quote: quoteRes.quote,
+        recipient: { bankCode, bankName, account, accountName },
+      };
+      sessionStorage.setItem('quote:selected', JSON.stringify(payload));
+      sessionStorage.removeItem('quote:state');
+    } catch {}
     const s = new URLSearchParams({
       quoteId: String(quoteRes.quote.id),
-      bankCode,
-      bankName,
-      account,
-      accountName,
-      amount: String(quoteRes.quote.amountXaf),
-      total: String(quoteRes.quote.totalPayXaf),
-      receiveMinor: String(quoteRes.quote.receiveNgnMinor),
-      rate: String(quoteRes.quote.adjustedRate),
     });
     router.push(`/transfer/confirm?${s.toString()}`);
   }
 
   const receiveNgn = quoteRes?.quote?.receiveNgnMinor ? (quoteRes.quote.receiveNgnMinor / 100).toFixed(2) : "0.00";
-
+  
   return (
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-2xl mx-auto space-y-6">
@@ -110,13 +146,16 @@ export default function QuotePage() {
 
         {quoteRes?.quote && (
           <div className="border rounded p-3 text-sm space-y-1">
-            <div>Rate: <span className="font-medium">{quoteRes.quote.adjustedRate}</span></div>
-            <div>Receiver gets: <span className="font-medium">₦ {receiveNgn}</span></div>
-            <div>Total to pay: {quoteRes.quote.totalPayXaf} XAF</div>
-            <div className="text-xs text-gray-600">Quote expires {new Date(quoteRes.quote.expiresAt).toLocaleTimeString()} ({ttlSec}s left)</div>
+            <div>Rate: <span className="font-medium">1 XAF to NGN {quoteRes.quote.adjustedRate}</span></div>
+            <div>Fees: <span className="font-medium">{quoteRes.quote.feeTotalXaf} XAF</span></div>
+            <div className="text-gray-800">Total to pay: <span className="font-medium">{quoteRes.quote.totalPayXaf} XAF</span></div>
+            <div>Receiver gets:</div>
+            <div className="text-2xl font-bold">₦ {receiveNgn}</div>
+            <div className="text-xs text-gray-600">Quote expires {new Date(quoteRes.quote.expiresAt).toLocaleTimeString()} ({ttlSec}s left){autoRefreshing ? ' – refreshing…' : ''}</div>
             <div className="pt-2">
               <button
-                className={`px-4 py-2 rounded text-white ${ttlSec > 0 ? 'bg-black' : 'bg-gray-400 pointer-events-none'}`}
+                className={`px-4 py-2 rounded text-white ${ttlSec > 0 ? 'bg-black' : 'bg-gray-400'}`}
+                disabled={ttlSec <= 0}
                 onClick={proceed}
               >
                 Confirm quote

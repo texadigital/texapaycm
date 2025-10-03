@@ -16,7 +16,10 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
       // If there is no refresh cookie at all, redirect immediately
       const hasRefreshCookie = typeof document !== 'undefined' && document.cookie.split('; ').some(c => c.startsWith('refresh_token='));
       if (!hasRefreshCookie) {
-        if (typeof window !== 'undefined') window.location.href = "/auth/login";
+        if (typeof window !== 'undefined') {
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/auth/login?next=${next}`;
+        }
         return;
       }
       // Try a silent refresh using HttpOnly cookie
@@ -31,7 +34,8 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
       } else {
         // Redirect to login
         if (typeof window !== 'undefined') {
-          window.location.href = "/auth/login";
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.href = `/auth/login?next=${next}`;
         }
       }
     }

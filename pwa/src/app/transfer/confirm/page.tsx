@@ -15,18 +15,27 @@ type ConfirmRes = {
 
 type StatusRes = { success?: boolean; status?: string; message?: string };
 
+type Quote = {
+  id: number;
+  ref: string;
+  amountXaf: number;
+  feeTotalXaf: number;
+  totalPayXaf: number;
+  receiveNgnMinor: number;
+  adjustedRate: number;
+  expiresAt: string;
+};
+
 export default function ConfirmPage() {
   const router = useRouter();
   const sp = useSearchParams();
   const quoteId = Number(sp.get("quoteId") || 0);
-  const bankCode = sp.get("bankCode") || "";
-  const bankName = sp.get("bankName") || "";
-  const accountNumber = sp.get("account") || "";
-  const accountName = sp.get("accountName") || "";
-  const amountXaf = Number(sp.get("amount") || 0);
-  const totalPayXaf = Number(sp.get("total") || 0);
-  const receiveMinor = Number(sp.get("receiveMinor") || 0);
-  const rate = sp.get("rate") || "";
+  const [bankCode, setBankCode] = React.useState("");
+  const [bankName, setBankName] = React.useState("");
+  const [accountNumber, setAccountNumber] = React.useState("");
+  const [accountName, setAccountName] = React.useState("");
+  const [quote, setQuote] = React.useState<Quote | null>(null);
+  const [ttlSec, setTtlSec] = React.useState(0);
 
   const [msisdn, setMsisdn] = React.useState("");
   const [transferId, setTransferId] = React.useState<number | null>(null);
@@ -42,6 +51,32 @@ export default function ConfirmPage() {
     onSuccess: (data) => {
       setTransferId(data.transfer.id);
       setPayinStatus(data.transfer.status || "payin_pending");
+    },
+    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
+  });
+
+  // Re-quote to refresh rate/expiry using stored recipient
+  const requote = useMutation({
+    mutationFn: async () => {
+      if (!quote) return null as any;
+      const res = await http.post('/api/mobile/transfers/quote', {
+        amountXaf: quote.amountXaf,
+        bankCode: bankCode,
+        accountNumber: accountNumber,
+      });
+      return res.data as { quote: Quote };
+    },
+    onSuccess: (d) => {
+      if (d?.quote) {
+        setQuote(d.quote);
+        // update URL with new quoteId only
+        const qp = new URLSearchParams({ quoteId: String(d.quote.id) });
+        router.replace(`/transfer/confirm?${qp.toString()}`);
+        try {
+          const payload = { quote: d.quote, recipient: { bankCode, bankName, account: accountNumber, accountName } };
+          sessionStorage.setItem('quote:selected', JSON.stringify(payload));
+        } catch {}
+      }
     },
     onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
   });
@@ -68,14 +103,54 @@ export default function ConfirmPage() {
         bankName,
         accountName,
         account: accountNumber,
-        amount: String(amountXaf || 0),
-        receiveMinor: String(receiveMinor || 0),
+        amount: String(quote?.amountXaf || 0),
+        receiveMinor: String(quote?.receiveNgnMinor || 0),
       });
       router.replace(`/transfer/${transferId}/success?${qp.toString()}`);
     }
   }, [transferId, payinStatus]);
 
-  const receiveNgn = (receiveMinor || 0) / 100;
+  // Load selected quote + recipient from sessionStorage (short URL)
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('quote:selected');
+      if (raw) {
+        const s = JSON.parse(raw) as { quote?: Quote; recipient?: { bankCode: string; bankName: string; account: string; accountName: string } };
+        if (s?.recipient) {
+          setBankCode(s.recipient.bankCode || "");
+          setBankName(s.recipient.bankName || "");
+          setAccountNumber(s.recipient.account || "");
+          setAccountName(s.recipient.accountName || "");
+        }
+        if (s?.quote) setQuote(s.quote);
+        if (!s?.recipient || !s?.quote) {
+          // Missing data: go back to verify
+          router.replace('/transfer/verify');
+        }
+      } else {
+        router.replace('/transfer/verify');
+      }
+    } catch {}
+  }, []);
+
+  // TTL countdown on confirm page
+  React.useEffect(() => {
+    if (!quote?.expiresAt) { setTtlSec(0); return; }
+    const expires = new Date(quote.expiresAt).getTime();
+    const tick = () => setTtlSec(Math.max(0, Math.floor((expires - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [quote?.expiresAt]);
+
+  // Auto refresh quote when expired
+  React.useEffect(() => {
+    if (!quote) return;
+    if (ttlSec > 0) return;
+    if (!requote.isPending) requote.mutate();
+  }, [ttlSec, quote]);
+
+  const receiveNgn = quote ? (quote.receiveNgnMinor / 100) : 0;
 
   return (
     <RequireAuth>
@@ -90,10 +165,12 @@ export default function ConfirmPage() {
           <div className="font-medium">{accountName || "Recipient"}</div>
           <div className="text-gray-600">{bankName} • {accountNumber}</div>
           <div className="pt-2 grid grid-cols-2 gap-2">
-            <div>Amount (XAF): <span className="font-medium">{amountXaf || "—"}</span></div>
-            <div>Receiver (NGN): <span className="font-medium">₦ {receiveNgn.toFixed(2)}</span></div>
-            <div>Total pay: {totalPayXaf || amountXaf} XAF</div>
-            <div>Rate: {rate || "—"}</div>
+            <div>Amount (XAF): <span className="font-medium">{quote?.amountXaf ?? "—"}</span></div>
+            <div>Receiver (NGN): <span className="text-xl font-semibold">₦ {receiveNgn.toFixed(2)}</span></div>
+            <div>Fees: <span className="font-medium">{quote?.feeTotalXaf ?? 0} XAF</span></div>
+            <div>Total pay: <span className="font-medium">{quote?.totalPayXaf ?? "—"} XAF</span></div>
+            <div className="col-span-2">Rate: <span className="font-medium">1 XAF to NGN {quote?.adjustedRate ?? "—"}</span></div>
+            <div className="col-span-2 text-xs text-gray-600">Quote expires {quote ? new Date(quote.expiresAt).toLocaleTimeString() : "—"} ({ttlSec}s left){requote.isPending ? ' – refreshing…' : ''}</div>
           </div>
         </div>
 
@@ -134,10 +211,34 @@ export default function ConfirmPage() {
           </div>
           <button
             type="submit"
-            className="w-full bg-black text-white px-4 py-2 rounded disabled:opacity-50"
-            disabled={confirm.isPending}
+            className="w-full text-white px-4 py-2 rounded disabled:opacity-50"
+            disabled={confirm.isPending || !!transferId}
+            style={{
+              backgroundColor:
+                payinStatus?.includes('pending') ? '#6b7280' :
+                (payinStatus === 'success' || payinStatus === 'completed') ? '#10b981' :
+                (payinStatus === 'failed') ? '#ef4444' : '#000000'
+            }}
           >
-            {confirm.isPending ? "Processing…" : "Pay with Mobile Money"}
+            <span className="inline-flex items-center gap-2">
+              {(() => {
+                const showSpin = confirm.isPending || (!!transferId && (payinStatus?.includes('pending') || !payinStatus));
+                return showSpin ? (
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                ) : null;
+              })()}
+              {(() => {
+                if (confirm.isPending) return "Processing…";
+                if (!transferId) return "Pay with Mobile Money";
+                if (payinStatus?.includes('pending') || !payinStatus) return "Pending…";
+                if (payinStatus === 'success' || payinStatus === 'completed') return "Completed";
+                if (payinStatus === 'failed') return "Failed";
+                return "Pending…";
+              })()}
+            </span>
           </button>
         </form>
 
@@ -153,8 +254,16 @@ export default function ConfirmPage() {
               </ul>
             </div>
             <div>
-              <button className="border rounded px-3 py-2" onClick={() => poll.mutate()} disabled={poll.isPending}>
-                {poll.isPending ? "Checking…" : "Refresh status"}
+              <button className="border rounded px-3 py-2 inline-flex items-center gap-2" onClick={() => poll.mutate()} disabled={poll.isPending}>
+                {poll.isPending ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    Checking…
+                  </>
+                ) : "Refresh status"}
               </button>
             </div>
           </div>

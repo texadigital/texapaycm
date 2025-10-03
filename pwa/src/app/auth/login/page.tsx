@@ -6,6 +6,11 @@ import { validateCameroon, providerMeta, formatForDisplay } from "@/lib/phone";
 import { setAccessToken } from "@/lib/auth";
 
 export default function LoginPage() {
+  const [nextUrl] = React.useState<string>(() => {
+    if (typeof window === 'undefined') return "/dashboard";
+    const u = new URL(window.location.href);
+    return u.searchParams.get('next') || "/dashboard";
+  });
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [pin, setPin] = React.useState("");
@@ -43,7 +48,7 @@ export default function LoginPage() {
       setError(msg);
     },
     onSuccess: () => {
-      window.location.href = "/dashboard";
+      window.location.href = nextUrl || "/dashboard";
     },
   });
 
