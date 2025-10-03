@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,29 @@ export default function ReceiptPage() {
       return res.data;
     },
     enabled: !!id,
+  });
+
+  const pdf = useMutation({
+    mutationFn: async () => {
+      // Using GET to receipt.pdf; just open in new tab
+      window.open(`/api/mobile/transfers/${id}/receipt.pdf`, "_blank");
+      return true;
+    },
+  });
+
+  const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const share = useMutation({
+    mutationFn: async () => {
+      const res = await http.post(`/api/mobile/transfers/${id}/share-url`);
+      return res.data as { url?: string; message?: string };
+    },
+    onSuccess: (d) => {
+      const u = d?.url || "";
+      setShareUrl(u);
+      try {
+        if (u && navigator.clipboard) navigator.clipboard.writeText(u);
+      } catch {}
+    },
   });
 
   return (
@@ -47,6 +70,13 @@ export default function ReceiptPage() {
           </a>
           {data.expires_at ? (
             <div className="text-gray-600">Expires: {new Date(data.expires_at).toLocaleString()}</div>
+          ) : null}
+          <div className="pt-2 flex gap-2">
+            <button className="border rounded px-3 py-1" onClick={() => pdf.mutate()} disabled={pdf.isPending}>Download PDF</button>
+            <button className="border rounded px-3 py-1" onClick={() => share.mutate()} disabled={share.isPending}>{share.isPending ? 'Generating…' : 'Generate share link'}</button>
+          </div>
+          {shareUrl ? (
+            <div className="text-xs text-gray-700 break-all">Share URL: <a className="underline" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a></div>
           ) : null}
         </div>
       )}
