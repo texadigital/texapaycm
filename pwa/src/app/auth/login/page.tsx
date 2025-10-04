@@ -147,9 +147,6 @@ export default function LoginPage() {
             <Link className="underline" href="/auth/forgot-password">Forgot password?</Link>
           </p>
           <p>
-            Have a code? <Link className="underline" href="/auth/reset-password">Reset now</Link>
-          </p>
-          <p>
             No account? <Link className="underline" href="/auth/register">Create one</Link>
           </p>
         </div>

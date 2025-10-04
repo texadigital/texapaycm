@@ -69,6 +69,14 @@ Route::middleware([
         return response()->json($rates);
     })->name('api.mobile.health.oxr');
 
+        // Public password reset endpoints (must be accessible without auth)
+        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.forgot_password');
+        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.reset_password');
+
         // Authenticated routes
         Route::middleware(['auth.jwt', \App\Http\Middleware\EnsurePoliciesAccepted::class])->group(function () {
         // Dashboard
@@ -167,9 +175,7 @@ Route::middleware([
         Route::get('/devices', [\App\Http\Controllers\Api\DeviceController::class, 'devices'])->name('api.mobile.devices.index');
         Route::post('/devices/test-push', [\App\Http\Controllers\Api\DeviceController::class, 'testPush'])->name('api.mobile.devices.test_push');
         
-        // Password Reset (Mobile API)
-        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])->name('api.mobile.auth.forgot_password');
-        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])->name('api.mobile.auth.reset_password');
+        // (password reset routes are defined above as public)
 
         // Policies (override to allow without EnsurePoliciesAccepted so users can accept)
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])

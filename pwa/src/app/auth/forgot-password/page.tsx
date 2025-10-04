@@ -1,10 +1,13 @@
 "use client";
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
+import { validateCameroon, formatForDisplay } from "@/lib/phone";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [phone, setPhone] = React.useState("");
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -13,11 +16,15 @@ export default function ForgotPasswordPage() {
     mutationFn: async () => {
       setMessage(null);
       setError(null);
-      const res = await http.post("/api/mobile/auth/forgot-password", { phone });
+      const v = validateCameroon(phone);
+      if (!v.valid) throw new Error(v.error || "Invalid phone number");
+      const res = await http.post("/api/mobile/auth/forgot-password", { phone: v.normalized });
       return res.data as any;
     },
     onSuccess: (d: any) => {
-      setMessage(d?.message || "Reset code sent. Check your SMS/push.");
+      const v = validateCameroon(phone);
+      const qp = new URLSearchParams({ phone: v.normalized });
+      router.replace(`/auth/reset-password?${qp.toString()}`);
     },
     onError: (e: any) => setError(e?.response?.data?.message || e.message || "Failed"),
   });
@@ -36,7 +43,6 @@ export default function ForgotPasswordPage() {
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            send.mutate();
           }}
         >
           <div>
@@ -48,14 +54,12 @@ export default function ForgotPasswordPage() {
               placeholder="+2376..."
               required
             />
+            <div className="mt-1 text-xs text-gray-600">{formatForDisplay(phone)}</div>
           </div>
           <button type="submit" className="w-full bg-black text-white px-4 py-2 rounded" disabled={send.isPending}>
             {send.isPending ? "Sending..." : "Send reset code"}
           </button>
         </form>
-        <p className="text-sm">
-          Have a code? <Link className="underline" href="/auth/reset-password">Reset now</Link>
-        </p>
         <p className="text-sm">
           <Link className="underline" href="/auth/login">Back to login</Link>
         </p>
