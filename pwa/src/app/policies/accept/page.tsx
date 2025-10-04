@@ -69,7 +69,7 @@ export default function PoliciesAcceptPage() {
 
         <div className="border rounded p-4 space-y-3 text-sm">
           <p>
-            Please read and accept our <a className="underline" href={termsUrl} target="_blank" rel="noreferrer">Terms & Conditions</a> and <a className="underline" href={privacyUrl} target="_blank" rel="noreferrer">Privacy Policy</a> to continue using the app.
+            Please read and accept our <a className="underline" href={termsUrl}>Terms & Conditions</a> and <a className="underline" href={privacyUrl}>Privacy Policy</a> to continue using the app.
           </p>
           <label className="flex items-start gap-2">
             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />

@@ -94,7 +94,7 @@ export default function KycPage() {
             ) : null}
             {webToken.data?.url ? (
               <div className="pt-2">
-                <a className="underline text-blue-600" href={webToken.data.url} target="_blank" rel="noreferrer">Open Smile ID</a>
+                <a className="underline text-blue-600" href={webToken.data.url}>Open Smile ID</a>
               </div>
             ) : null}
           </div>

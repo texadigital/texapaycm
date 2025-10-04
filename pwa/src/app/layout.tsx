@@ -57,7 +57,7 @@ export default function RootLayout({
               <InstallPromptProvider />
               <PoliciesGuard>
                 <OfflineQueueProvider>
-                  <div className="pb-16">{children}</div>
+                  <main className="pb-16 max-w-3xl mx-auto px-6 w-full">{children}</main>
                   <BottomNav />
                 </OfflineQueueProvider>
               </PoliciesGuard>
