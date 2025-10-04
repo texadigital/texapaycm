@@ -1,0 +1,76 @@
+name: Deploy PWA to pay.texa.ng
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'pwa/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set release name
+        run: echo "REL=pwa-$(date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_ENV
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync PWA source to server release directory
+        run: |
+          rsync -az --delete \
+            --exclude='.next' \
+            --exclude='node_modules' \
+            pwa/ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/releases/${REL}/"
+
+      - name: Remote build, switch symlink, and reload PM2/Nginx
+        run: |
+          ssh "${VPS_USER}@${VPS_HOST}" bash -lc '
+            set -e
+            APP_DIR='"${VPS_APP_DIR}"'
+            REL_NAME='"${REL}"'
+            REL="$APP_DIR/releases/$REL_NAME"
+            echo "Using release: $REL"
+
+            # Ensure shared env exists
+            if [ ! -f "$APP_DIR/shared/.env.production" ]; then
+              echo "Missing $APP_DIR/shared/.env.production"; exit 1; fi
+
+            # Link env into release
+            ln -sfn "$APP_DIR/shared/.env.production" "$REL/.env.production"
+
+            # Install WITH devDependencies (next.config.ts parsing)
+            cd "$REL"
+            npm ci
+            npm run build
+
+            # Switch current symlink
+            ln -sfn "$REL" "$APP_DIR/current"
+
+            # PM2 app (port 3005)
+            if pm2 describe texa-pwa >/dev/null 2>&1; then
+              pm2 reload texa-pwa --update-env
+            else
+              NODE_ENV=production pm2 start npm --name texa-pwa -- run start -- -p 3005
+            fi
+            pm2 save
+
+            # Reload Nginx
+            nginx -t && systemctl reload nginx || true
+            echo "Deploy complete: $REL_NAME"
+          '
