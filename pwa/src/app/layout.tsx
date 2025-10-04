@@ -10,7 +10,6 @@ import AuthNoticeBanner from "@/components/guards/auth-notice-banner";
 import OfflineQueueProvider from "@/components/providers/offline-queue-provider";
 import AnalyticsProvider from "@/components/providers/analytics";
 import BottomNav from "@/components/bottom-nav";
-import PoliciesGuard from "@/components/guards/policies-guard";
 import InstallPromptProvider from "@/components/providers/install-prompt";
 
 const geistSans = Geist({
@@ -54,10 +53,8 @@ export default function RootLayout({
               <AnalyticsProvider />
               <InstallPromptProvider />
               <OfflineQueueProvider>
-                <PoliciesGuard>
-                  <div className="pb-16">{children}</div>
-                  <BottomNav />
-                </PoliciesGuard>
+                <div className="pb-16">{children}</div>
+                <BottomNav />
               </OfflineQueueProvider>
             </AuthNoticeProvider>
           </AuthProvider>

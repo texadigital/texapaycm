@@ -19,6 +19,10 @@ export function setAccessToken(token: string | null) {
     if (typeof window !== 'undefined') {
       if (token) window.sessionStorage.setItem('accessToken', token);
       else window.sessionStorage.removeItem('accessToken');
+      // Notify listeners that auth token changed
+      try {
+        window.dispatchEvent(new CustomEvent('auth:token', { detail: { hasToken: !!token } }));
+      } catch {}
     }
   } catch {}
 }

@@ -28,18 +28,35 @@ export function newIdemKey() {
   });
 }
 
-// Attach Idempotency-Key automatically for mutating requests if not provided
+// Attach Idempotency-Key automatically and ensure Authorization header is set.
+// Axios v1 uses AxiosHeaders which requires using .set() for reliability.
 http.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const method = (config.method || 'get').toUpperCase();
-  const h = (config.headers ?? {}) as any;
-  if (!h['Idempotency-Key']) {
-    h['Idempotency-Key'] = newIdemKey();
+  const headers = (config.headers ?? {}) as any;
+
+  // Ensure Idempotency-Key exists on every request (safe for GET too)
+  if (typeof headers.set === 'function') {
+    // AxiosHeaders
+    if (!headers.get?.('Idempotency-Key')) {
+      headers.set('Idempotency-Key', newIdemKey());
+    }
+  } else {
+    if (!headers['Idempotency-Key']) {
+      headers['Idempotency-Key'] = newIdemKey();
+    }
   }
+
   // Attach bearer if present
   const access = getAccessToken();
   if (access) {
-    h['Authorization'] = `Bearer ${access}`;
+    if (typeof headers.set === 'function') {
+      headers.set('Authorization', `Bearer ${access}`);
+    } else {
+      headers['Authorization'] = `Bearer ${access}`;
+    }
   }
+
+  // In case headers was initially undefined, put it back on config
+  config.headers = headers;
   return config;
 });
 

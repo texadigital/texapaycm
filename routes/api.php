@@ -173,10 +173,6 @@ Route::middleware([
 
         // Policies
         Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
-        Route::get('/policies/status', [\App\Http\Controllers\Api\PoliciesController::class, 'status'])->name('api.mobile.policies.status');
-        Route::post('/policies/accept', [\App\Http\Controllers\Api\PoliciesController::class, 'accept'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->name('api.mobile.policies.accept');
 
         // Account management
         Route::post('/account/delete', [\App\Http\Controllers\Api\ProfileController::class, 'deleteAccount'])

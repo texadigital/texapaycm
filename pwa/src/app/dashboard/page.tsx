@@ -3,6 +3,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import http from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
 import RequireAuth from "@/components/guards/require-auth";
 import { CardSkeleton } from "@/components/ui/skeleton";
 
@@ -19,12 +20,28 @@ type DashboardResponse = {
 };
 
 export default function DashboardPage() {
+  const [enabled, setEnabled] = React.useState<boolean>(() => !!getAccessToken());
+
+  // Turn on query when a token becomes available
+  React.useEffect(() => {
+    const onToken = (e: any) => setEnabled(!!getAccessToken());
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:token', onToken as any);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth:token', onToken as any);
+      }
+    };
+  }, []);
+
   const { data, isLoading, error, refetch, isFetching } = useQuery<DashboardResponse>({
     queryKey: ["dashboard"],
     queryFn: async () => {
       const res = await http.get("/api/mobile/dashboard");
       return res.data;
     },
+    enabled,
     // Keep previous data visible during background refetch to avoid full skeleton flash
     placeholderData: (prev) => prev as any,
     // Don't refetch on window focus/reconnect to reduce surprise refreshes over ngrok

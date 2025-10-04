@@ -43,15 +43,6 @@ export default function SupportHelpPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Quick links to inline help pages */}
-            <div className="border rounded p-3 text-sm">
-              <div className="font-medium mb-2">Quick topics</div>
-              <div className="flex flex-wrap gap-2">
-                <a className="underline" href="/support/help/getting-started">Getting started</a>
-                <a className="underline" href="/support/help/limits-and-fees">Limits & fees</a>
-                <a className="underline" href="/support/help/transfers">Transfers</a>
-              </div>
-            </div>
             {/* Render groups if present */}
             {q.data?.groups?.length ? (
               q.data.groups.map((g, i) => (
