@@ -20,6 +20,7 @@ class DashboardController extends Controller
         $payload = Cache::remember($cacheKey, now()->addSeconds(15), function () use ($userId, $user) {
             $todayStart = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
+            $weekStart = Carbon::now()->startOfWeek();
 
             $today = Transfer::query()
                 ->where('user_id', $userId)
@@ -39,7 +40,29 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get(['id','status','amount_xaf','created_at']);
 
+            // Total Sent (transfer-only): sum of successful outgoing transfers in NGN minor
+            $successStatuses = ['completed', 'payout_success'];
+            $totalAll = (int) Transfer::query()
+                ->where('user_id', $userId)
+                ->whereIn('status', $successStatuses)
+                ->sum('receive_ngn_minor');
+            $totalMonth = (int) Transfer::query()
+                ->where('user_id', $userId)
+                ->where('created_at', '>=', $monthStart)
+                ->whereIn('status', $successStatuses)
+                ->sum('receive_ngn_minor');
+            $totalWeek = (int) Transfer::query()
+                ->where('user_id', $userId)
+                ->where('created_at', '>=', $weekStart)
+                ->whereIn('status', $successStatuses)
+                ->sum('receive_ngn_minor');
+
+            // First name for greeting
+            $full = (string) ($user->full_name ?? $user->name ?? '');
+            $first = trim(explode(' ', trim($full))[0] ?? '');
+
             return [
+                'firstName' => $first !== '' ? $first : null,
                 'kyc' => [
                     'status' => $user->kyc_status ?? 'unverified',
                     'level' => (int) ($user->kyc_level ?? 0),
@@ -51,6 +74,12 @@ class DashboardController extends Controller
                 'month' => [
                     'count' => (int) ($month->cnt ?? 0),
                     'totalXaf' => (int) ($month->sum ?? 0),
+                ],
+                'totalSent' => [
+                    'currency' => 'NGN',
+                    'allMinor' => $totalAll,
+                    'monthMinor' => $totalMonth,
+                    'weekMinor' => $totalWeek,
                 ],
                 'recentTransfers' => $recent->map(fn ($t) => [
                     'id' => $t->id,

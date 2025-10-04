@@ -38,6 +38,15 @@ type FeedRes = { months: FeedMonth[]; meta?: { page?: number; perPage?: number; 
 
 export default function DashboardPage() {
   const [enabled, setEnabled] = React.useState<boolean>(() => !!getAccessToken());
+  const [showAmount, setShowAmount] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const v = window.localStorage.getItem('dash:showTotalSent');
+    return v === null ? true : v === '1';
+  });
+  const [period, setPeriod] = React.useState<'all'|'month'|'week'>(() => {
+    if (typeof window === 'undefined') return 'all';
+    return (window.localStorage.getItem('dash:totalSentPeriod') as any) || 'all';
+  });
 
   // Turn on query when a token becomes available
   React.useEffect(() => {
@@ -96,6 +105,15 @@ export default function DashboardPage() {
     return `${symbol}${(minor / divisor).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   };
 
+  const totalSentDisplay = React.useMemo(() => {
+    const ts: any = (data as any)?.totalSent;
+    if (!ts) return '₦0.00';
+    const minor = period === 'month' ? ts.monthMinor : period === 'week' ? ts.weekMinor : ts.allMinor;
+    return formatMoney(minor || 0, ts.currency || 'NGN');
+  }, [data, period]);
+
+  const firstName = (data as any)?.firstName || '';
+
   // Auto-refresh when success page broadcasts completion
   React.useEffect(() => {
     const onRefresh = () => refetch();
@@ -112,19 +130,13 @@ export default function DashboardPage() {
   return (
     <RequireAuth>
     <div className="min-h-dvh p-6 max-w-3xl mx-auto space-y-6">
+      {/* A) Header Row */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <div className="text-xl font-semibold">Hi{firstName ? `, ${firstName}` : ''}</div>
         <div className="flex items-center gap-2">
-          <Link href="/transfer/verify" className="bg-black text-white text-sm px-3 py-1.5 rounded">
-            New transfer
-          </Link>
-          <button
-            onClick={() => refetch()}
-            className="text-sm border rounded px-3 py-1"
-            disabled={isFetching}
-          >
-            {isFetching ? "Refreshing..." : "Refresh"}
-          </button>
+          <Link href="/support" className="border rounded px-2 py-1 text-sm">Help</Link>
+          <Link href="/notifications" className="border rounded px-2 py-1 text-sm">Notifications</Link>
+          <button onClick={() => refetch()} className="text-sm border rounded px-3 py-1" disabled={isFetching}>{isFetching ? 'Refreshing...' : 'Refresh'}</button>
         </div>
       </div>
 
@@ -143,22 +155,44 @@ export default function DashboardPage() {
 
       {data && (
         <div className="space-y-6">
-          <section className="grid grid-cols-2 gap-4">
-            <div className="border rounded p-4">
-              <div className="text-xs text-gray-500">KYC Status</div>
-              <div className="text-lg font-medium capitalize">{data.kyc?.status ?? "—"}</div>
-              <div className="text-sm text-gray-600">Level {data.kyc?.level ?? "—"}</div>
+          {/* B) Total Sent card */}
+          <section className="border rounded p-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-gray-600">Total Sent</div>
+              <Link href="/transfers" className="text-xs text-gray-800 underline">Transaction History ›</Link>
             </div>
-            <div className="border rounded p-4">
-              <div className="text-xs text-gray-500">Today</div>
-              <div className="text-lg font-medium">{data.today?.count ?? 0} transfers</div>
-              <div className="text-sm text-gray-600">Total {data.today?.totalXaf ?? 0} XAF</div>
+            <div className="flex items-center justify-between">
+              <div className="text-3xl font-bold">
+                {showAmount ? totalSentDisplay : '•••••'}
+              </div>
+              <button
+                className="text-xs border rounded px-2 py-1"
+                onClick={() => {
+                  setShowAmount((v) => {
+                    const nv = !v; window.localStorage.setItem('dash:showTotalSent', nv ? '1' : '0'); return nv;
+                  });
+                }}
+              >{showAmount ? 'Hide' : 'Show'}</button>
             </div>
-            <div className="border rounded p-4">
-              <div className="text-xs text-gray-500">This Month</div>
-              <div className="text-lg font-medium">{data.month?.count ?? 0} transfers</div>
-              <div className="text-sm text-gray-600">Total {data.month?.totalXaf ?? 0} XAF</div>
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              {(['all','month','week'] as const).map((p) => (
+                <button key={p} className={`px-2 py-1 rounded border ${period===p?'bg-black text-white':'bg-white text-black'}`} onClick={() => { setPeriod(p); window.localStorage.setItem('dash:totalSentPeriod', p); }}>{p==='all'?'All-time':p==='month'?'This month':'This week'}</button>
+              ))}
             </div>
+          </section>
+
+          {/* C) Primary CTA */}
+          <section className="border rounded p-4">
+            <div className="text-base font-medium">Send Money</div>
+            <div className="text-sm text-gray-600 mb-3">To bank · Pay with Mobile Money</div>
+            <Link href="/transfer/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start Transfer</Link>
+          </section>
+
+          {/* D) Quick Actions */}
+          <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Link href="/transfer/verify" className="border rounded p-3 text-center">Start Transfer</Link>
+            <Link href="/transfers" className="border rounded p-3 text-center">Transfer History</Link>
+            {/* Recipients and Rates hidden if not present; placeholders omitted */}
           </section>
 
           <section>
@@ -199,6 +233,13 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* F) KYC/Security nudge */}
+          {(!data.kyc || (data.kyc?.status ?? 'unverified') !== 'verified') && (
+            <section className="border rounded p-3 bg-amber-50 text-amber-900 text-sm">
+              Verify your identity to increase limits and keep transfers secure. <Link href="/kyc" className="underline">Start KYC</Link>
+            </section>
+          )}
         </div>
       )}
     </div>

@@ -7,9 +7,7 @@ import { getAccessToken } from "@/lib/auth";
 const tabs = [
   { href: "/dashboard", label: "Home" },
   { href: "/transfers", label: "Transfers" },
-  { href: "/notifications", label: "Alerts" },
-  { href: "/profile", label: "Profile" },
-  { href: "/support", label: "Support" },
+  { href: "/profile", label: "Me" },
 ];
 
 export default function BottomNav() {
@@ -31,7 +29,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75">
-      <ul className="max-w-2xl mx-auto grid grid-cols-5 text-xs">
+      <ul className="max-w-2xl mx-auto grid grid-cols-3 text-xs">
         {tabs.map((t) => {
           const active = path === t.href || (path?.startsWith(t.href + "/"));
           return (
