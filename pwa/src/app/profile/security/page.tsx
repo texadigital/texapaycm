@@ -18,6 +18,10 @@ export default function SecurityPage() {
       const res = await http.get("/api/mobile/profile/security");
       return res.data;
     },
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const pin = useMutation({

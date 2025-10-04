@@ -39,6 +39,10 @@ export default function TransfersListPage() {
       const res = await http.get("/api/mobile/transactions/feed", { params: { page, perPage } });
       return res.data as any;
     },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const months: FeedMonth[] = Array.isArray((q.data as any)?.months) ? ((q.data as any).months as FeedMonth[]) : [];

@@ -163,5 +163,46 @@ export default withPWA({
         cacheableResponse: { statuses: [200] },
       },
     },
+    // Profile summary
+    {
+      urlPattern: /\/api\/mobile\/profile(\/.*)?$/,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "api-profile",
+        cacheableResponse: { statuses: [200] },
+        expiration: { maxAgeSeconds: 60, maxEntries: 50 },
+      },
+    },
+    // Security endpoints
+    {
+      urlPattern: /\/api\/mobile\/profile\/security(\/.*)?$/,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "api-security",
+        cacheableResponse: { statuses: [200] },
+        expiration: { maxAgeSeconds: 60, maxEntries: 50 },
+      },
+    },
+    // Notification preferences
+    {
+      urlPattern: /\/api\/mobile\/notifications\/preferences(\/.*)?$/,
+      handler: "StaleWhileRevalidate",
+      options: {
+        cacheName: "api-notification-preferences",
+        cacheableResponse: { statuses: [200] },
+        expiration: { maxAgeSeconds: 60 * 5, maxEntries: 100 },
+      },
+    },
+    // Support content
+    {
+      urlPattern: /\/api\/mobile\/support(\/.*)?$/,
+      handler: "StaleWhileRevalidate",
+      options: {
+        cacheName: "api-support",
+        cacheableResponse: { statuses: [200] },
+        expiration: { maxAgeSeconds: 60 * 10, maxEntries: 100 },
+      },
+    },
   ],
-})(nextConfig);
+})
+(nextConfig);
