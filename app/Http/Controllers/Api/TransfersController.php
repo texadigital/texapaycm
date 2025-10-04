@@ -182,6 +182,10 @@ class TransfersController extends Controller
         $sessionId = $transfer->payout_ref
             ?: ($transfer->name_enquiry_reference ?: $transfer->payin_ref);
 
+        // Dynamic receipt branding/footer from admin settings or env
+        $receiptFooter = AdminSetting::getValue('receipt.footer_text', env('RECEIPT_FOOTER_TEXT'));
+        $receiptWatermarkUrl = AdminSetting::getValue('receipt.watermark_url', env('RECEIPT_WATERMARK_URL'));
+
         return response()->json([
             'id' => $transfer->id,
             'status' => $transfer->status,
@@ -211,6 +215,9 @@ class TransfersController extends Controller
             'sessionId' => $sessionId,
             'lastPayoutError' => $transfer->last_payout_error,
             'createdAt' => $transfer->created_at?->toISOString(),
+            // Share receipt extras
+            'receiptFooterText' => $receiptFooter,
+            'receiptWatermarkUrl' => $receiptWatermarkUrl,
         ]);
     }
     /**
