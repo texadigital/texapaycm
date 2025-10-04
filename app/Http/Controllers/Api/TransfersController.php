@@ -258,6 +258,17 @@ class TransfersController extends Controller
         return $this->idempotent($request, function () use ($safeHaven, $data) {
             $res = $safeHaven->nameEnquiry($data['bankCode'], $data['accountNumber']);
             $ok = (bool) ($res['success'] ?? false);
+            // Mask account for logs
+            $acct = (string) $data['accountNumber'];
+            $masked = strlen($acct) > 4 ? str_repeat('•', max(0, strlen($acct) - 4)) . substr($acct, -4) : '••••';
+            \Log::info('mobile.name_enquiry', [
+                'u' => (int) (\Illuminate\Support\Facades\Auth::id() ?: 0),
+                'bank' => $data['bankCode'],
+                'acct' => $masked,
+                'ok' => $ok,
+                'ref' => $res['reference'] ?? null,
+                'code' => $res['raw']['responseCode'] ?? null,
+            ]);
             if (!$ok) {
                 return response()->json([
                     'success' => false,
