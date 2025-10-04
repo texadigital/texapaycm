@@ -6,6 +6,14 @@ import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
 
 export default function ResetPasswordPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <ResetPasswordInner />
+    </React.Suspense>
+  );
+}
+
+function ResetPasswordInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const initialPhone = React.useMemo(() => sp.get("phone") || "", [sp]);

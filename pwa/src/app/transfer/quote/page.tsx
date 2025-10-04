@@ -23,6 +23,14 @@ type QuoteRes = {
 };
 
 export default function QuotePage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <QuoteInner />
+    </React.Suspense>
+  );
+}
+
+function QuoteInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const bankCode = sp.get("bankCode") || "";

@@ -20,6 +20,14 @@ type NameEnquiryRes = {
 };
 
 export default function VerifyRecipientPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <VerifyRecipientInner />
+    </React.Suspense>
+  );
+}
+
+function VerifyRecipientInner() {
   const router = useRouter();
   const params = useSearchParams();
 

@@ -7,6 +7,14 @@ import PageHeader from "@/components/ui/page-header";
 import http from "@/lib/api";
 
 export default function PoliciesAcceptPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <PoliciesAcceptInner />
+    </React.Suspense>
+  );
+}
+
+function PoliciesAcceptInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const nextUrl = sp.get("next") || "/dashboard";

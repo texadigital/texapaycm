@@ -1,9 +1,13 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { getAccessToken, setAccessToken, refreshAccessToken } from './auth';
 
-// Use relative base URL so Next.js rewrites (next.config.ts) proxy /api/* to backend.
-// This avoids CORS during development and works in production when served on same origin.
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+// Base URL strategy:
+// - In local browser dev (localhost), use relative base ('') so requests go to /api and
+//   get proxied by Next.js rewrites() to the backend. This avoids CORS.
+// - Otherwise (production or non-local), use NEXT_PUBLIC_API_BASE_URL.
+const isBrowser = typeof window !== 'undefined';
+const onLocalhost = isBrowser && /^(localhost|127\.0\.0\.1):\d+$/i.test(window.location.host);
+const BASE_URL = onLocalhost ? '' : (process.env.NEXT_PUBLIC_API_BASE_URL || '');
 
 export const http: AxiosInstance = axios.create({
   // If BASE_URL is empty, axios will use same-origin relative URLs

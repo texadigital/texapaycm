@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
@@ -17,15 +17,24 @@ type TimelineRes = {
 };
 
 export default function TransferSuccessPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <TransferSuccessInner />
+    </React.Suspense>
+  );
+}
+
+function TransferSuccessInner() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const sp = useSearchParams();
 
-  const bankName = sp.get("bankName") || "";
-  const accountName = sp.get("accountName") || "";
-  const account = sp.get("account") || "";
-  const amount = Number(sp.get("amount") || 0);
-  const receiveMinor = Number(sp.get("receiveMinor") || 0);
+  const [bankName, setBankName] = React.useState(sp.get("bankName") || "");
+  const [accountName, setAccountName] = React.useState(sp.get("accountName") || "");
+  const [account, setAccount] = React.useState(sp.get("account") || "");
+  const [amount, setAmount] = React.useState(Number(sp.get("amount") || 0));
+  const [receiveMinor, setReceiveMinor] = React.useState(Number(sp.get("receiveMinor") || 0));
 
   const { data, refetch, isFetching } = useQuery<TimelineRes>({
     queryKey: ["transfer-success-status", id],
@@ -90,6 +99,29 @@ export default function TransferSuccessPage() {
       try { window.dispatchEvent(new CustomEvent('transfers:refresh')); } catch {}
     }
   }, [payoutStatus, data?.payoutStatus]);
+
+  // Server fallback for amounts/recipient when URL params are missing or zero
+  React.useEffect(() => {
+    (async () => {
+      if (!id) return;
+      const needs = !receiveMinor || !amount || !bankName || !account || !accountName;
+      if (!needs) return;
+      try {
+        const res = await http.get(`/api/mobile/transfers/${id}`);
+        const d = res.data || {};
+        if (d?.recipientGetsMinor) setReceiveMinor(Number(d.recipientGetsMinor || 0));
+        if (typeof d?.amountXaf === 'number') setAmount(Number(d.amountXaf || 0));
+        if (d?.accountName) setAccountName(d.accountName);
+        if (d?.bankName) setBankName(d.bankName);
+        if (d?.accountNumber) setAccount(d.accountNumber);
+      } catch (e: any) {
+        const status = e?.response?.status;
+        if (status === 403) {
+          try { router.replace('/transfers'); } catch {}
+        }
+      }
+    })();
+  }, [id]);
 
   const receiveNgn = (receiveMinor || 0) / 100;
 

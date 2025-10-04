@@ -12,6 +12,24 @@ export default function TransferFailedPage() {
 
   const [error, setError] = React.useState<string | null>(null);
   const [details, setDetails] = React.useState<any>(null);
+  const friendly = React.useMemo(() => {
+    const codeMap: Record<string, string> = {
+      '51': 'Insufficient funds at beneficiary bank',
+      '54': 'Expired instrument',
+      '05': 'Do not honor',
+      '91': 'Issuer or switch inoperative',
+      '96': 'System malfunction',
+    };
+    const raw = details?.lastPayoutError as string | undefined;
+    const explicit = (details?.lastPayoutProviderCode || details?.lastPayoutCode || details?.providerCode || '') as string;
+    let code = String(explicit || '');
+    if (!code && raw) {
+      const m = raw.match(/code\s*([A-Za-z0-9]+)/i) || raw.match(/responseCode["']?:\s*['"]?([A-Za-z0-9]+)/i);
+      if (m) code = m[1];
+    }
+    const msg = code ? (codeMap[code] || `Payment provider declined (code ${code})`) : undefined;
+    return { code, msg };
+  }, [details?.lastPayoutError, details?.lastPayoutProviderCode, details?.lastPayoutCode, details?.providerCode]);
 
   const load = useMutation({
     mutationFn: async () => {
@@ -57,6 +75,9 @@ export default function TransferFailedPage() {
           {details?.lastPayoutError ? (
             <div className="text-sm text-gray-700">Reason: {details.lastPayoutError}</div>
           ) : null}
+          {friendly.msg && (
+            <div className="text-xs text-gray-700">Provider: {friendly.msg}</div>
+          )}
           <div className="text-xs text-gray-600">Transfer ID: {id}</div>
           {details?.refundId && (
             <div className="text-sm mt-1">

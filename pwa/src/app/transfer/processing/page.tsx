@@ -6,6 +6,14 @@ import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 
 export default function ProcessingPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <ProcessingInner />
+    </React.Suspense>
+  );
+}
+
+function ProcessingInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const transferId = Number(sp.get("transferId") || 0);
@@ -14,6 +22,7 @@ export default function ProcessingPage() {
   const [payoutStatus, setPayoutStatus] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [refundInfo, setRefundInfo] = React.useState<{ id?: string; status?: string } | null>(null);
+  const [friendlyProviderMsg, setFriendlyProviderMsg] = React.useState<string | null>(null);
   const selectedRef = React.useRef<{ quote?: any; recipient?: { bankCode: string; bankName: string; account: string; accountName: string } } | null>(null);
 
   React.useEffect(() => {
@@ -79,6 +88,22 @@ export default function ProcessingPage() {
           const res = await http.get(`/api/mobile/transfers/${transferId}`);
           const d = res.data || {};
           if (d?.refundId) setRefundInfo({ id: d.refundId, status: d.refundStatus });
+          // map provider codes
+          const codeMap: Record<string, string> = {
+            '51': 'Insufficient funds at beneficiary bank',
+            '54': 'Expired instrument',
+            '05': 'Do not honor',
+            '91': 'Issuer or switch inoperative',
+            '96': 'System malfunction',
+          };
+          const raw: string = d?.lastPayoutError || '';
+          const explicit: string = d?.lastPayoutProviderCode || d?.lastPayoutCode || d?.providerCode || '';
+          let code = explicit;
+          if (!code && raw) {
+            const m = raw.match(/code\s*([A-Za-z0-9]+)/i) || raw.match(/responseCode["']?:\s*['"]?([A-Za-z0-9]+)/i);
+            if (m) code = m[1];
+          }
+          if (code) setFriendlyProviderMsg(codeMap[code] || `Payment provider declined (code ${code})`);
         } catch {}
         setTimeout(() => router.replace(`/transfer/${transferId}/failed`), 1500);
       })();
@@ -110,7 +135,8 @@ export default function ProcessingPage() {
             )}
             {payoutStatus && /failed|error/i.test(payoutStatus) && (
               <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
-                Payout failed. {refundInfo?.id ? (
+                Payout failed. {friendlyProviderMsg ? (<>{friendlyProviderMsg}. </>) : null}
+                {refundInfo?.id ? (
                   <>Refund initiated: <span className="font-mono">{refundInfo.id}</span> ({refundInfo.status || 'initiated'})</>
                 ) : 'Initiating refund…'}
               </div>

@@ -29,6 +29,14 @@ type Quote = {
 };
 
 export default function ConfirmPage() {
+  return (
+    <React.Suspense fallback={<div className="min-h-dvh grid place-items-center p-6 text-sm text-gray-600">Loading…</div>}>
+      <ConfirmInner />
+    </React.Suspense>
+  );
+}
+
+function ConfirmInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const quoteId = Number(sp.get("quoteId") || 0);

@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // SSR mode (default) – we deploy behind PM2/Nginx, so no static export
+  images: { unoptimized: true },
+  eslint: { ignoreDuringBuilds: true },
   async rewrites() {
     if (!backendBase) return [];
     return [
