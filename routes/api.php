@@ -70,7 +70,7 @@ Route::middleware([
     })->name('api.mobile.health.oxr');
 
         // Authenticated routes
-        Route::middleware(['auth.jwt'])->group(function () {
+        Route::middleware(['auth.jwt', \App\Http\Middleware\EnsurePoliciesAccepted::class])->group(function () {
         // Dashboard
         Route::get('/dashboard', [\App\Http\Controllers\Api\DashboardController::class, 'summary'])->name('api.mobile.dashboard');
 
@@ -171,11 +171,15 @@ Route::middleware([
         Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])->name('api.mobile.auth.forgot_password');
         Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])->name('api.mobile.auth.reset_password');
 
-        // Policies
-        Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])->name('api.mobile.policies');
-        Route::get('/policies/status', [\App\Http\Controllers\Api\PoliciesController::class, 'status'])->name('api.mobile.policies.status');
+        // Policies (override to allow without EnsurePoliciesAccepted so users can accept)
+        Route::get('/policies', [\App\Http\Controllers\Api\PoliciesController::class, 'index'])
+            ->withoutMiddleware([\App\Http\Middleware\EnsurePoliciesAccepted::class])
+            ->name('api.mobile.policies');
+        Route::get('/policies/status', [\App\Http\Controllers\Api\PoliciesController::class, 'status'])
+            ->withoutMiddleware([\App\Http\Middleware\EnsurePoliciesAccepted::class])
+            ->name('api.mobile.policies.status');
         Route::post('/policies/accept', [\App\Http\Controllers\Api\PoliciesController::class, 'accept'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class, \App\Http\Middleware\EnsurePoliciesAccepted::class])
             ->name('api.mobile.policies.accept');
 
         // Account management

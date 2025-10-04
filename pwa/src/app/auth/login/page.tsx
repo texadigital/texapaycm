@@ -55,7 +55,17 @@ export default function LoginPage() {
       const msg = e?.response?.data?.message || e.message || "Login failed";
       setError(msg);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      try {
+        // Ask backend if policies are accepted; if not, go to acceptance first
+        const res = await http.get('/api/mobile/policies/status');
+        const accepted = !!(res?.data?.accepted);
+        if (!accepted) {
+          const qp = new URLSearchParams({ next: nextUrl || '/dashboard' });
+          window.location.href = `/policies/accept?${qp.toString()}`;
+          return;
+        }
+      } catch {}
       window.location.href = nextUrl || "/dashboard";
     },
   });

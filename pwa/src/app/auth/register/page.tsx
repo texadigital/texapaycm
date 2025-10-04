@@ -44,7 +44,15 @@ export default function RegisterPage() {
       const msg = data?.message || e.message || "Registration failed";
       setTopError(msg);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      try {
+        const res = await http.get('/api/mobile/policies/status');
+        const accepted = !!(res?.data?.accepted);
+        if (!accepted) {
+          router.replace('/policies/accept?next=/dashboard');
+          return;
+        }
+      } catch {}
       router.push("/dashboard");
     },
   });

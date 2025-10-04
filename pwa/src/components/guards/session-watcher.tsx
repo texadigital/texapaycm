@@ -2,13 +2,25 @@
 import React from "react";
 import { getAccessToken, refreshAccessToken, setAccessToken } from "@/lib/auth";
 
-// Global session watcher: warns before expiry, tries proactive refresh,
-// and surfaces a banner when refresh fails.
+// Session watcher: keep session alive while user is active; on expiry, auto-redirect to login without UI prompts.
 export default function SessionWatcher() {
   const [expAt, setExpAt] = React.useState<number | null>(null);
-  const [warning, setWarning] = React.useState(false);
-  const [expired, setExpired] = React.useState(false);
+  const lastActive = React.useRef<number>(Date.now());
+  // 20 minutes inactivity window (can be overridden via NEXT_PUBLIC_INACTIVITY_MS)
+  const INACTIVITY_MS = (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_INACTIVITY_MS)
+    ? Number((process as any).env.NEXT_PUBLIC_INACTIVITY_MS)
+    : 20 * 60 * 1000;
 
+  // Track activity
+  React.useEffect(() => {
+    const bump = () => { lastActive.current = Date.now(); };
+    ['click','keydown','mousemove','touchstart','scroll','visibilitychange'].forEach((evt) => window.addEventListener(evt, bump, { passive: true } as any));
+    return () => {
+      ['click','keydown','mousemove','touchstart','scroll','visibilitychange'].forEach((evt) => window.removeEventListener(evt, bump));
+    };
+  }, []);
+
+  // Read token exp whenever it changes
   React.useEffect(() => {
     function readExp() {
       const tok = getAccessToken();
@@ -22,7 +34,7 @@ export default function SessionWatcher() {
     }
     readExp();
     const onStorage = () => readExp();
-    const onUnauthorized = () => setExpired(true);
+    const onUnauthorized = () => redirectToLogin();
     window.addEventListener('storage', onStorage);
     window.addEventListener('auth:unauthorized', onUnauthorized as any);
     return () => {
@@ -31,52 +43,57 @@ export default function SessionWatcher() {
     };
   }, []);
 
+  // Timers for proactive refresh and expiry handling
   React.useEffect(() => {
     if (!expAt) return;
+    const now = Date.now();
     const warnAt = expAt - 120_000; // 2m before expiry
     const autoAt = expAt - 60_000;  // 1m before expiry
-    const now = Date.now();
 
-    let warnTimer: any; let autoTimer: any; let expiryTimer: any;
-    if (warnAt > now) warnTimer = setTimeout(() => setWarning(true), warnAt - now);
-    else setWarning(true);
-    if (autoAt > now) autoTimer = setTimeout(async () => {
-      try {
-        const newTok = await refreshAccessToken();
-        setAccessToken(newTok || null);
-        setWarning(false);
-      } catch {
-        setExpired(true);
+    let autoTimer: any; let expiryTimer: any; let activityCheck: any;
+
+    // Proactive refresh if recently active
+    const scheduleAuto = () => {
+      const delay = Math.max(0, autoAt - Date.now());
+      autoTimer = setTimeout(async () => {
+        // Only refresh if user was active in the inactivity window
+        if (Date.now() - lastActive.current <= INACTIVITY_MS) {
+          try {
+            const newTok = await refreshAccessToken();
+            setAccessToken(newTok || null);
+          } catch {
+            redirectToLogin();
+          }
+        }
+      }, delay);
+    };
+
+    // Hard expiry -> redirect
+    const scheduleExpiry = () => {
+      const delay = Math.max(0, expAt - Date.now() + 1000);
+      expiryTimer = setTimeout(() => redirectToLogin(), delay);
+    };
+
+    // Periodically check activity and reschedule auto-refresh if needed
+    scheduleAuto();
+    scheduleExpiry();
+    activityCheck = setInterval(() => {
+      // If user becomes active again before autoAt, ensure auto refresh is still scheduled
+      if (Date.now() < autoAt && Date.now() - lastActive.current <= INACTIVITY_MS) {
+        // no-op; timer already set
       }
-    }, Math.max(0, autoAt - now));
-    // hard expiry guard
-    expiryTimer = setTimeout(() => setExpired(true), Math.max(0, expAt - now + 5000));
-    return () => { clearTimeout(warnTimer); clearTimeout(autoTimer); clearTimeout(expiryTimer); };
+    }, 15000);
+
+    return () => { clearTimeout(autoTimer); clearTimeout(expiryTimer); clearInterval(activityCheck); };
   }, [expAt]);
 
-  if (!warning && !expired) return null;
-  return (
-    <div className={`px-4 py-2 text-sm ${expired ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
-      <div className="max-w-4xl mx-auto flex items-center gap-3">
-        <span className="font-medium">{expired ? 'Session expired' : 'Session expiring soon'}</span>
-        <span className="hidden sm:inline">{expired ? 'Please log in again to continue.' : 'We will refresh automatically. If this fails, you will be asked to log in again.'}</span>
-        <div className="ml-auto flex items-center gap-2">
-          {!expired ? (
-            <button
-              className="underline"
-              onClick={async () => {
-                try {
-                  const t = await refreshAccessToken();
-                  setAccessToken(t || null);
-                  setWarning(false);
-                } catch { setExpired(true); }
-              }}
-            >Refresh now</button>
-          ) : (
-            <a className="underline" href="/auth/login">Login</a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  function redirectToLogin() {
+    try {
+      setAccessToken(null);
+    } catch {}
+    const next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.replace(`/auth/login?next=${next}`);
+  }
+
+  return null;
 }
