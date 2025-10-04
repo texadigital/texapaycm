@@ -23,13 +23,23 @@ export default function ReceiptPage() {
 
   const pdf = useMutation({
     mutationFn: async () => {
-      // Using GET to receipt.pdf; just open in new tab
-      window.open(`/api/mobile/transfers/${id}/receipt.pdf`, "_blank");
+      // Fetch PDF as blob and trigger download without new tab
+      const res = await fetch(`/api/mobile/transfers/${id}/receipt.pdf`, { credentials: 'include' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       return true;
     },
   });
 
   const [shareUrl, setShareUrl] = React.useState<string | null>(null);
+  const [showViewer, setShowViewer] = React.useState<boolean>(true);
   const share = useMutation({
     mutationFn: async () => {
       const res = await http.post(`/api/mobile/transfers/${id}/share-url`);
@@ -64,19 +74,40 @@ export default function ReceiptPage() {
       )}
 
       {data && (
-        <div className="space-y-2 text-sm">
-          <a className="underline text-blue-600" href={data.url} target="_blank" rel="noreferrer">
-            Open receipt
-          </a>
+        <div className="space-y-3 text-sm">
           {data.expires_at ? (
             <div className="text-gray-600">Expires: <span suppressHydrationWarning>{new Date(data.expires_at).toLocaleString()}</span></div>
           ) : null}
-          <div className="pt-2 flex gap-2">
-            <button className="border rounded px-3 py-1" onClick={() => pdf.mutate()} disabled={pdf.isPending}>Download PDF</button>
-            <button className="border rounded px-3 py-1" onClick={() => share.mutate()} disabled={share.isPending}>{share.isPending ? 'Generating…' : 'Generate share link'}</button>
-          </div>
+
+          {/* Inline viewer */}
+          {showViewer && data.url ? (
+            <div className="border rounded overflow-hidden" style={{height: 600}}>
+              <iframe src={data.url} title="Receipt" className="w-full h-full" />
+            </div>
+          ) : null}
+          {data.url ? (
+            <div className="flex items-center gap-2">
+              <button className="border rounded px-3 py-1" onClick={() => setShowViewer((v) => !v)}>
+                {showViewer ? 'Hide viewer' : 'Show viewer'}
+              </button>
+              <button className="border rounded px-3 py-1" onClick={() => pdf.mutate()} disabled={pdf.isPending}>
+                {pdf.isPending ? 'Preparing…' : 'Download PDF'}
+              </button>
+              <button className="border rounded px-3 py-1" onClick={() => share.mutate()} disabled={share.isPending}>
+                {share.isPending ? 'Generating…' : 'Generate share link'}
+              </button>
+            </div>
+          ) : null}
+
           {shareUrl ? (
-            <div className="text-xs text-gray-700 break-all">Share URL: <a className="underline" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a></div>
+            <div className="text-xs text-gray-700 break-all">
+              Share URL:
+              <span className="ml-1 select-all">{shareUrl}</span>
+              <button
+                className="ml-2 border rounded px-2 py-0.5"
+                onClick={() => { try { if (navigator.clipboard) navigator.clipboard.writeText(shareUrl); } catch {} }}
+              >Copy</button>
+            </div>
           ) : null}
         </div>
       )}
