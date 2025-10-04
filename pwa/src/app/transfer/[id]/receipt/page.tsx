@@ -34,6 +34,11 @@ export default function ReceiptPage() {
       return res.data as any;
     },
     enabled: !!id,
+    refetchInterval: (data) => {
+      const s = (data as any)?.status || '';
+      const terminal = s.includes('success') || s.includes('failed') || s.includes('completed') || s.includes('error');
+      return terminal ? false : 5000; // 5s until terminal
+    },
   });
 
   const pdf = useMutation({
@@ -74,6 +79,28 @@ export default function ReceiptPage() {
   });
 
   const refCard = React.useRef<HTMLDivElement>(null);
+  const [startedAt] = React.useState<number>(() => Date.now());
+  const router = (require('next/navigation') as any).useRouter?.() || null;
+
+  // Handle 403s by redirecting away from another user's transfer
+  React.useEffect(() => {
+    const err: any = details.error;
+    if (!err) return;
+    const status = err?.response?.status;
+    if (status === 403) {
+      try { (router as any)?.replace?.('/transfers'); } catch {}
+    }
+  }, [details.error]);
+
+  // Safety: stop auto-refresh after 2 minutes to avoid infinite polling
+  React.useEffect(() => {
+    const idTimer = setInterval(() => {
+      if (Date.now() - startedAt > 120_000) {
+        details.refetch?.({ cancelRefetch: true } as any);
+      }
+    }, 10000);
+    return () => clearInterval(idTimer);
+  }, [startedAt]);
 
   async function ensureHtml2Canvas(): Promise<any> {
     const w = window as any;

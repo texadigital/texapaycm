@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
+import { getScopedItem, setScopedItem } from "@/lib/storage";
 
 type QuoteReq = { amountXaf: number; bankCode: string; accountNumber: string };
 
@@ -30,11 +31,26 @@ export default function QuotePage() {
   const accountName = sp.get("accountName") || "";
 
   const [amount, setAmount] = React.useState<number>(Number(sp.get("amount") || 0));
+  const [amountText, setAmountText] = React.useState<string>("");
   const [quoteRes, setQuoteRes] = React.useState<QuoteRes | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [ttlSec, setTtlSec] = React.useState(0);
   const [autoRefreshing, setAutoRefreshing] = React.useState(false);
   const [restored, setRestored] = React.useState(false);
+  const [previewRate, setPreviewRate] = React.useState<number | null>(null); // NGN per XAF
+  const controllerRef = React.useRef<AbortController | null>(null);
+  const lastKeyRef = React.useRef<string>("");
+  const [rateLimitedUntil, setRateLimitedUntil] = React.useState<number>(0);
+
+  // Number formatters
+  const nf = React.useMemo(() => new Intl.NumberFormat('en-NG'), []);
+  const ngnFmt = React.useMemo(() => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 2 }), []);
+
+  // Initialize amountText from amount
+  React.useEffect(() => {
+    setAmountText(amount > 0 ? nf.format(amount) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function formatLimitError(e: any): string {
     const d = e?.response?.data || {};
@@ -57,43 +73,116 @@ export default function QuotePage() {
   const quote = useMutation({
     mutationFn: async (vars: QuoteReq) => {
       setErr(null);
-      const res = await http.post("/api/mobile/transfers/quote", vars);
+      // Cancel any in-flight request
+      try { controllerRef.current?.abort(); } catch {}
+      controllerRef.current = new AbortController();
+      const res = await http.post("/api/mobile/transfers/quote", vars, { signal: controllerRef.current.signal });
       return res.data as QuoteRes;
     },
-    onSuccess: (d) => setQuoteRes(d),
-    onError: (e: any) => setErr(formatLimitError(e)),
+    onSuccess: (d) => {
+      setQuoteRes(d);
+      try {
+        const key = `quote:lock:${bankCode}:${account}:${amount}`;
+        setScopedItem(key, d);
+        // Save last implied rate as a fallback for instant preview
+        const implied = (d.quote.receiveNgnMinor / 100) / Math.max(1, d.quote.amountXaf);
+        try { sessionStorage.setItem('rate:last', JSON.stringify({ rate: implied, at: Date.now() })); } catch {}
+        if (!previewRate) setPreviewRate(implied);
+      } catch {}
+    },
+    onError: (e: any) => {
+      if (e?.response?.status === 429) {
+        // Enter short cooldown window to avoid hammering
+        const until = Date.now() + 12000; // 12s
+        setRateLimitedUntil(until);
+        setErr("Please wait a few seconds before trying again.");
+      } else {
+        // Persist structured limits if present for the Limits page fallback
+        try {
+          const d = e?.response?.data || {};
+          const snapshot = {
+            minXaf: d.minXaf ?? d.min ?? undefined,
+            maxXaf: d.maxXaf ?? d.max ?? undefined,
+            usedToday: d.usedToday ?? undefined,
+            usedMonth: d.usedMonth ?? undefined,
+            remainingXafDay: d.remainingXafDay ?? d.remainingDay ?? undefined,
+            remainingXafMonth: d.remainingXafMonth ?? d.remainingMonth ?? undefined,
+            dailyCap: d.dailyCap ?? undefined,
+            monthlyCap: d.monthlyCap ?? undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          sessionStorage.setItem('limits:last', JSON.stringify(snapshot));
+        } catch {}
+        setErr(formatLimitError(e));
+      }
+    },
   });
 
-  // Restore saved quote state if same recipient
+  // Fetch lightweight FX preview for instant calculation (NGN per XAF)
+  React.useEffect(() => {
+    let cancelled = false;
+    // 1) try cached preview
+    try {
+      const raw = sessionStorage.getItem('rate:preview');
+      if (raw) {
+        const cached = JSON.parse(raw) as { rate?: number; at?: number };
+        if (cached?.rate && cached?.at && Date.now() - cached.at < 10 * 60_000) {
+          setPreviewRate(cached.rate);
+        }
+      }
+    } catch {}
+    // 2) network fetch in background
+    (async function fetchPreview() {
+      try {
+        const res = await http.get('/api/mobile/pricing/rate-preview');
+        const data = res.data || {};
+        const usdToXaf = Number(data.usd_to_xaf || data.usdToXaf || 0);
+        const usdToNgn = Number(data.usd_to_ngn || data.usdToNgn || 0);
+        if (!cancelled && usdToXaf > 0 && usdToNgn > 0) {
+          const cross = usdToNgn / usdToXaf; // NGN per XAF
+          setPreviewRate(cross);
+          try { sessionStorage.setItem('rate:preview', JSON.stringify({ rate: cross, at: Date.now() })); } catch {}
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Restore saved quote state if same recipient (scoped per user)
   React.useEffect(() => {
     if (restored) return;
     try {
-      const raw = sessionStorage.getItem('quote:state');
-      if (raw) {
-        const s = JSON.parse(raw) as { amount?: number; bankCode?: string; account?: string };
+      const s = getScopedItem<{ amount?: number; bankCode?: string; account?: string }>('quote:state');
         if (s && s.bankCode === bankCode && s.account === account && typeof s.amount === 'number' && s.amount > 0) {
           setAmount(s.amount);
+          setAmountText(nf.format(s.amount));
         }
-      }
     } catch {}
     setRestored(true);
   }, [restored, bankCode, account]);
 
-  // Persist state
+  // Persist state (scoped per user)
   React.useEffect(() => {
     try {
-      sessionStorage.setItem('quote:state', JSON.stringify({ amount, bankCode, account }));
+      setScopedItem('quote:state', { amount, bankCode, account });
     } catch {}
   }, [amount, bankCode, account]);
 
-  // Debounce quote while typing
+  // Preview-only: reuse quote lock if valid, otherwise clear quote and show preview
   React.useEffect(() => {
     if (!amount || !bankCode || !account) { setQuoteRes(null); return; }
-    const h = setTimeout(() => {
-      quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account });
-    }, 400);
-    return () => clearTimeout(h);
-  }, [amount, bankCode, account]);
+    if (Date.now() < rateLimitedUntil) return; // respect cooldown
+    try {
+      const lockKey = `quote:lock:${bankCode}:${account}:${amount}`;
+      const lock = getScopedItem<QuoteRes>(lockKey);
+      const exp = lock?.quote?.expiresAt ? new Date(lock.quote.expiresAt).getTime() : 0;
+      if (lock?.quote && exp > Date.now()) {
+        setQuoteRes(lock);
+        return;
+      }
+    } catch {}
+    setQuoteRes(null); // fall back to preview until Next
+  }, [amount, bankCode, account, rateLimitedUntil]);
 
   // TTL countdown
   React.useEffect(() => {
@@ -105,82 +194,141 @@ export default function QuotePage() {
     return () => clearInterval(id);
   }, [quoteRes?.quote?.expiresAt]);
 
-  // Auto re-quote when expired to restart countdown with latest rate
-  React.useEffect(() => {
-    if (!quoteRes || !amount || !bankCode || !account) return;
-    if (ttlSec > 0) { setAutoRefreshing(false); return; }
-    if (quote.isPending || autoRefreshing) return;
-    setAutoRefreshing(true);
-    quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account }, {
-      onSettled: () => setAutoRefreshing(false),
-    });
-  }, [ttlSec, quoteRes, amount, bankCode, account]);
+  // No auto re-quote. When expired, we simply show TTL=0 and require user to get a new quote on Next.
 
   function proceed() {
-    if (!quoteRes?.quote) return;
-    // Persist selected quote + recipient for confirm page (short URL)
-    try {
-      const payload = {
-        quote: quoteRes.quote,
-        recipient: { bankCode, bankName, account, accountName },
-      };
-      sessionStorage.setItem('quote:selected', JSON.stringify(payload));
-      sessionStorage.removeItem('quote:state');
-    } catch {}
-    const s = new URLSearchParams({
-      quoteId: String(quoteRes.quote.id),
-    });
-    router.push(`/transfer/confirm?${s.toString()}`);
+    const go = (qr: QuoteRes) => {
+      try {
+        const payload = { quote: qr.quote, recipient: { bankCode, bankName, account, accountName } };
+        sessionStorage.setItem('quote:selected', JSON.stringify(payload));
+        sessionStorage.removeItem('quote:state');
+      } catch {}
+      const s = new URLSearchParams({ quoteId: String(qr.quote.id) });
+      router.push(`/transfer/confirm?${s.toString()}`);
+    };
+    // If we already have a valid quote, proceed immediately
+    if (quoteRes?.quote && ttlSec > 0) { go(quoteRes); return; }
+    // Otherwise fetch one quote now (preview-only pattern)
+    if (Date.now() < rateLimitedUntil) { setErr('Please wait a few seconds before trying again.'); return; }
+    quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account }, { onSuccess: (d) => go(d) });
   }
-
   const receiveNgn = quoteRes?.quote?.receiveNgnMinor ? (quoteRes.quote.receiveNgnMinor / 100).toFixed(2) : "0.00";
+  let effectivePreviewRate = previewRate;
+  if (!effectivePreviewRate) {
+    try {
+      const raw = sessionStorage.getItem('rate:last');
+      if (raw) {
+        const last = JSON.parse(raw) as { rate?: number; at?: number };
+        if (last?.rate) effectivePreviewRate = last.rate;
+      }
+    } catch {}
+  }
+  const previewReceive = (!quoteRes?.quote && effectivePreviewRate && amount)
+    ? (amount * effectivePreviewRate).toFixed(2)
+    : null;
+  const impliedRate = quoteRes?.quote ? ((quoteRes.quote.receiveNgnMinor / 100) / Math.max(1, quoteRes.quote.amountXaf)).toFixed(2) : null;
   
   return (
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-2xl mx-auto space-y-6">
-        <h1 className="text-2xl font-semibold">Enter amount</h1>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={() => router.back()} aria-label="Back" className="text-xl">‹</button>
+            <h1 className="text-lg font-semibold">Transfer To Bank Account</h1>
+          </div>
+          <button className="text-sm underline" onClick={() => router.push('/transfers')}>History</button>
+        </div>
 
         {/* Recipient summary */}
-        <div className="border rounded p-3 text-sm flex items-center justify-between">
+        <section className="bg-gray-50 border rounded-xl p-3 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-xs">{(bankName || '•').slice(0,1).toUpperCase()}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{accountName || "Recipient"}</div>
+            <div className="text-xs text-blue-600 truncate">{account}</div>
+            <div className="text-xs text-gray-600 truncate">{bankName}</div>
+          </div>
+        </section>
+
+        {err ? (
+          <div className={`text-sm rounded p-2 ${err.includes('wait') ? 'text-gray-700 border border-gray-200' : 'text-red-600 border border-red-200'}`}>{err}</div>
+        ) : null}
+
+        {/* Amount card */}
+        <section className="border rounded-xl p-4 space-y-4">
+          <div className="text-sm font-medium">Amount</div>
           <div>
-            <div className="font-medium">{accountName || "Recipient"}</div>
-            <div className="text-gray-600">{bankName} • {account}</div>
+            <input
+              className="w-full px-0 py-2 text-base border-b focus:outline-none focus:ring-0"
+              type="text"
+              inputMode="numeric"
+              value={amountText}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const digits = raw.replace(/[^0-9]/g, "");
+                const num = digits ? Number(digits) : 0;
+                setAmount(num);
+                setAmountText(digits ? nf.format(num) : "");
+              }}
+              placeholder="XAF 100–5,000,000"
+              aria-label="Amount in XAF"
+            />
+            {quote.isPending && (
+              <div className="text-xs text-gray-500 mt-1">Getting quote…</div>
+            )}
           </div>
-        </div>
-
-        {err ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{err}</div> : null}
-
-        <div className="space-y-3">
-          <label className="block text-sm">Amount (XAF)</label>
-          <input
-            className="w-full border rounded px-3 py-2"
-            type="number"
-            min={1}
-            value={amount || ""}
-            onChange={(e) => setAmount(parseInt(e.target.value || "0", 10))}
-            placeholder="10000"
-          />
-        </div>
-
-        {quoteRes?.quote && (
-          <div className="border rounded p-3 text-sm space-y-1">
-            <div>Rate: <span className="font-medium">1 XAF to NGN {quoteRes.quote.adjustedRate}</span></div>
-            <div>Fees: <span className="font-medium">{quoteRes.quote.feeTotalXaf} XAF</span></div>
-            <div className="text-gray-800">Total to pay: <span className="font-medium">{quoteRes.quote.totalPayXaf} XAF</span></div>
-            <div>Receiver gets:</div>
-            <div className="text-2xl font-bold">₦ {receiveNgn}</div>
-            <div className="text-xs text-gray-600">Quote expires {new Date(quoteRes.quote.expiresAt).toLocaleTimeString()} ({ttlSec}s left){autoRefreshing ? ' – refreshing…' : ''}</div>
-            <div className="pt-2">
-              <button
-                className={`px-4 py-2 rounded text-white ${ttlSec > 0 ? 'bg-black' : 'bg-gray-400'}`}
-                disabled={ttlSec <= 0}
-                onClick={proceed}
+          {/* Quick chips */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {[5000, 10000, 20000, 50000, 100000, 200000].map((v) => (
+              <button key={v}
+                type="button"
+                className={`h-10 rounded-md border text-sm ${amount===v? 'bg-gray-900 text-white border-gray-900':'bg-white hover:bg-gray-50'}`}
+                onClick={() => { setAmount(v); setAmountText(nf.format(v)); }}
               >
-                Confirm quote
+                XAF {v.toLocaleString()}
               </button>
-            </div>
+            ))}
           </div>
-        )}
+          {/* Rate line */}
+          {quoteRes?.quote ? (
+            <div className="text-xs text-gray-700 flex items-center gap-2">
+              <span className="inline-block h-4 w-4 rounded bg-gray-900" />
+              <span>
+                Rate: 1 XAF = NGN {impliedRate}
+              </span>
+            </div>
+          ) : (
+            previewRate ? (
+              <div className="text-xs text-gray-700 flex items-center gap-2">
+                <span className="inline-block h-4 w-4 rounded bg-gray-900" />
+                <span>Rate: 1 XAF = NGN {previewRate.toFixed(2)}</span>
+              </div>
+            ) : null
+          )}
+        </section>
+        {/* Receive summary and Next */}
+        <section className="space-y-3">
+          <div className="text-sm">
+            <div className="text-gray-800">Receiver gets</div>
+            <div className="text-2xl font-bold">
+              {quoteRes?.quote
+                ? ngnFmt.format(Number(receiveNgn))
+                : (previewReceive
+                    ? ngnFmt.format(Number(previewReceive))
+                    : (amount ? 'Estimating…' : ngnFmt.format(0)))}
+            </div>
+            {quoteRes?.quote ? (
+              <div className="text-xs text-gray-600">Quote expires {new Date(quoteRes.quote.expiresAt).toLocaleTimeString()} ({ttlSec}s left){autoRefreshing ? ' – refreshing…' : ''}</div>
+            ) : null}
+          </div>
+          <button
+            className="w-full h-12 rounded-full bg-emerald-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
+            disabled={quote.isPending || !amount}
+            onClick={proceed}
+          >
+            Next
+          </button>
+        </section>
       </div>
     </RequireAuth>
   );

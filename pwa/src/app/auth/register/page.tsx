@@ -20,13 +20,22 @@ export default function RegisterPage() {
   const [topError, setTopError] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
 
+  function normalizePhone(p: string) {
+    const digits = p.replace(/\D+/g, '');
+    if (digits.startsWith('237')) return `+${digits}`; // already with country
+    if (digits.length === 9 && digits.startsWith('6')) return `+237${digits}`; // local CM format
+    return `+${digits}`;
+  }
+
   const register = useMutation({
     mutationFn: async () => {
       setTopError(null);
       setFieldErrors({});
+      // Ensure Sanctum session + CSRF cookie exists (required for cookie-based auth flows)
+      try { await http.get('/sanctum/csrf-cookie'); } catch {}
       const res = await http.post("/api/mobile/auth/register", {
         name,
-        phone,
+        phone: normalizePhone(phone),
         password,
         pin,
       });
@@ -41,8 +50,23 @@ export default function RegisterPage() {
         });
         setFieldErrors(normalized);
       }
-      const msg = data?.message || e.message || "Registration failed";
-      setTopError(msg);
+      let msg = data?.message || e.message || "Registration failed";
+      // Only set 'Phone already registered' if the backend indicates phone duplication explicitly
+      const status = e?.response?.status;
+      const rawMsg = String(data?.message || e?.response?.data || e.message || '');
+      const phoneTakenFromFields = Array.isArray((data as any)?.errors?.phone) && ((data as any).errors.phone as string[]).some((t) => /taken|exists|already/i.test(String(t)));
+      const explicitPhoneInMsg = /phone|msisdn/i.test(rawMsg) && /taken|exists|already|duplicate/i.test(rawMsg);
+      const sqlKeyPhone = /users?_phone_unique|unique.*phone/i.test(rawMsg);
+      if ((status === 422 || status === 409) && (phoneTakenFromFields || explicitPhoneInMsg || sqlKeyPhone)) {
+        setFieldErrors((prev) => ({ ...prev, phone: ["Phone already registered"] }));
+        msg = ""; // suppress top error in favor of field error
+      } else if (String(status).startsWith('5')) {
+        msg = "Something went wrong. Please try again.";
+      }
+      if (typeof msg === 'string' && msg.toLowerCase().includes('session store not set')) {
+        msg = 'Session was not initialized. Please refresh the page and try again.';
+      }
+      if (msg) setTopError(msg);
     },
     onSuccess: async () => {
       try {
@@ -109,7 +133,16 @@ export default function RegisterPage() {
               name="phone"
               className="w-full border rounded px-3 py-2"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                // Clear phone-specific error as user edits
+                setFieldErrors((prev) => {
+                  if (!prev.phone) return prev;
+                  const { phone: _ph, ...rest } = prev as any;
+                  return rest;
+                });
+                if (topError) setTopError(null);
+              }}
               placeholder="+2376..."
               required
               autoComplete="tel"

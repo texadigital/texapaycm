@@ -8,6 +8,7 @@ import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import BankPicker, { Bank } from "@/components/banks/bank-picker";
+import { loadBankDirectory, resolveBankName } from "@/lib/banks";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type NameEnquiryRes = {
@@ -140,6 +141,8 @@ export default function VerifyRecipientPage() {
         if (s.account) setAccount(s.account);
       }
     } catch {}
+    // Prefetch bank directory for resolver and logos
+    loadBankDirectory().catch(() => undefined);
     setMounted(true);
   }, []);
 
@@ -183,25 +186,13 @@ export default function VerifyRecipientPage() {
           </div>
         )}
         {error ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{error}</div> : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-1">
-            <label className="block text-sm mb-1">Bank</label>
-            <div className="flex gap-2">
-              <input className="flex-1 border rounded px-3 py-2" value={bankName} readOnly placeholder="Select bank" />
-              <button className="border rounded px-3" onClick={() => setPickerOpen(true)}>Select</button>
-            </div>
-            {suggestions.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {suggestions.slice(0, 6).map((b) => (
-                  <button key={b.bankCode} className="text-xs border rounded px-2 py-1" onClick={() => { setBankCode(b.bankCode); setBankName(b.name); }}>{b.name}</button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="sm:col-span-1">
-            <label className="block text-sm mb-1">Account number</label>
+        {/* Recipient Account card */}
+        <section className="border rounded-xl p-4 space-y-3">
+          <div className="text-sm font-medium">Recipient Account</div>
+          {/* Account number */}
+          <div>
             <input
-              className="w-full border rounded px-3 py-2"
+              className="w-full px-0 py-2 text-base border-b focus:outline-none focus:ring-0"
               value={account}
               onChange={(e) => {
                 const only = e.target.value.replace(/\D+/g, '').slice(0, 10);
@@ -210,25 +201,49 @@ export default function VerifyRecipientPage() {
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="off"
-              placeholder="Enter 10 digits"
+              placeholder="Enter 10 digits Account Number"
               aria-describedby="acct-help"
             />
             <div id="acct-help" className="text-xs text-gray-600 mt-1">Enter 10 digits Account Number</div>
             {suggestBusy && <div className="text-xs text-gray-500 mt-1">Checking bank suggestions…</div>}
           </div>
-        </div>
-        {!ne?.accountName ? (
-          <div className="flex items-center gap-3">
-            <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending || !bankCode || account.trim().length !== 10}>
-              {nameEnquiry.isPending ? "Verifying…" : "Verify account"}
+          {/* Bank row */}
+          <div>
+            <button
+              type="button"
+              className="w-full px-0 py-3 flex items-center justify-between hover:bg-gray-50 rounded"
+              onClick={() => setPickerOpen(true)}
+              aria-label="Select Bank"
+            >
+              <span className="flex items-center gap-2">
+                <span className="h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center text-xs">
+                  {(bankName || '•').slice(0,1).toUpperCase()}
+                </span>
+                <span className="text-sm">{bankName || 'Select Bank'}</span>
+              </span>
+              <span aria-hidden className="text-gray-400">›</span>
             </button>
-            <div role="status" aria-live="polite" className="text-xs text-gray-700">{statusMsg}</div>
+            {suggestions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {suggestions.slice(0, 6).map((b) => (
+                  <button key={b.bankCode} className="text-xs border rounded px-2 py-1" onClick={() => { setBankCode(b.bankCode); setBankName(b.name); }}>{b.name}</button>
+                ))}
+              </div>
+            )}
+            {/* Inline verification status inside card */}
+            <div role="status" aria-live="polite" className="mt-3">
+              {nameEnquiry.isPending && (
+                <span className="inline-block text-xs px-2 py-1 rounded bg-gray-100 text-gray-800">Verifying…</span>
+              )}
+              {!nameEnquiry.isPending && ne?.accountName && (
+                <span className="inline-flex items-center gap-2 text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  {ne.accountName}
+                </span>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="text-xs text-gray-600">
-            Verified automatically. <button className="underline" onClick={() => nameEnquiry.mutate()} disabled={nameEnquiry.isPending}>Verify again</button>
-          </div>
-        )}
+        </section>
         {/* Recipients tabs */}
         <section className="border rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
@@ -248,7 +263,7 @@ export default function VerifyRecipientPage() {
           ) : (
             <div className="divide-y">
               {(() => {
-                const fromApi = (recents.data?.data || []).map(r => ({ bankCode: r.bankCode, bankName: r.bankName, accountNumber: r.accountNumber, accountName: r.accountName }));
+                const fromApi = (recents.data?.data || []).map(r => ({ bankCode: r.bankCode, bankName: resolveBankName(r.bankCode, r.bankName), accountNumber: r.accountNumber, accountName: r.accountName }));
                 const mergedMap = new Map<string, { bankCode: string; bankName?: string; accountNumber: string; accountName?: string }>();
                 const keyf = (x: any) => `${x.bankCode}:${x.accountNumber}`;
                 for (const it of loadRecents()) mergedMap.set(keyf(it), it as any);
@@ -274,22 +289,27 @@ export default function VerifyRecipientPage() {
                       }
                     }}
                   >
-                    <div className="text-sm">
-                      <div className="font-medium line-clamp-1">{r.accountName || r.accountNumber}</div>
-                      <div className="text-xs text-gray-600">{(r.accountNumber||'').slice(-4)} · {r.bankName || r.bankCode}</div>
+                    <div className="text-sm flex items-center justify-between w-full">
+                      <div>
+                        <div className="font-medium line-clamp-1">{r.accountName || r.accountNumber}</div>
+                        <div className="text-xs text-gray-600">{(r.accountNumber||'').slice(-4)} · {resolveBankName(r.bankCode)}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center text-[11px]">
+                          {(resolveBankName(r.bankCode) || '').slice(0,1).toUpperCase()}
+                        </div>
+                        <div className="text-xs text-gray-500">›</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">›</div>
-                  </button>
+                </button>
                 )) : <div className="p-3 text-sm text-gray-600">No recipients.</div>;
               })()}
             </div>
           )}
         </section>
-        <div>
-          <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" onClick={goNext} disabled={!ne?.accountName || (bankCode+":"+account.trim()) !== verifiedKey}>
+          <button className="w-full h-12 rounded-full bg-emerald-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors" onClick={goNext} disabled={!ne?.accountName || (bankCode+":"+account.trim()) !== verifiedKey}>
             Next
           </button>
-        </div>
         {toast && (
           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-black text-white text-sm px-3 py-1.5 rounded">{toast}</div>
         )}

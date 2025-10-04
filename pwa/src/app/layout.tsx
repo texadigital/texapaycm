@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/components/providers/query-provider";
@@ -28,11 +28,14 @@ export const metadata: Metadata = {
   title: "TexaPay",
   description: "TexaPay PWA",
   applicationName: "TexaPay",
-  themeColor: "#000000",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
 };
 
 export default function RootLayout({

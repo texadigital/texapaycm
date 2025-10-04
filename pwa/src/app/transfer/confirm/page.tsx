@@ -45,6 +45,13 @@ export default function ConfirmPage() {
   const [payinStatus, setPayinStatus] = React.useState<string | null>(null);
   const [payoutStatus, setPayoutStatus] = React.useState<string | null>(null);
   const [autoPayoutStarted, setAutoPayoutStarted] = React.useState(false);
+  const [cooldownUntil, setCooldownUntil] = React.useState(0);
+  const lastConfirmVarsRef = React.useRef<ConfirmReq | null>(null);
+  const retried429Ref = React.useRef(false);
+
+  // Number formatters and derived display values
+  const nf = React.useMemo(() => new Intl.NumberFormat('en-NG'), []);
+  const ngnFmt = React.useMemo(() => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 2 }), []);
 
   function formatLimitError(e: any): string {
     const d = e?.response?.data || {};
@@ -73,8 +80,26 @@ export default function ConfirmPage() {
     onSuccess: (data) => {
       setTransferId(data.transfer.id);
       setPayinStatus(data.transfer.status || "payin_pending");
+      // Redirect to dedicated processing screen
+      router.replace(`/transfer/processing?transferId=${data.transfer.id}`);
     },
-    onError: (e: any) => setTopError(formatLimitError(e)),
+    onError: (e: any) => {
+      const status = e?.response?.status;
+      if (status === 429 && !retried429Ref.current) {
+        // Cooldown and retry once
+        const until = Date.now() + 12000;
+        setCooldownUntil(until);
+        setTopError("Please wait a few seconds before trying again.");
+        retried429Ref.current = true;
+        setTimeout(() => {
+          if (Date.now() >= until && lastConfirmVarsRef.current) {
+            confirm.mutate(lastConfirmVarsRef.current);
+          }
+        }, 12050);
+        return;
+      }
+      setTopError(formatLimitError(e));
+    },
   });
 
   // Payout initiation and polling
@@ -88,7 +113,7 @@ export default function ConfirmPage() {
     onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
   });
 
-  // Re-quote to refresh rate/expiry using stored recipient
+  // Manual re-quote to refresh rate/expiry using stored recipient
   const requote = useMutation({
     mutationFn: async () => {
       if (!quote) return null as any;
@@ -193,36 +218,60 @@ export default function ConfirmPage() {
     return () => clearInterval(id);
   }, [quote?.expiresAt]);
 
-  // Auto refresh quote when expired
-  React.useEffect(() => {
-    if (!quote) return;
-    if (ttlSec > 0) return;
-    if (!requote.isPending) requote.mutate();
-  }, [ttlSec, quote]);
+  // No auto refresh; user triggers re-quote manually.
 
   const receiveNgn = quote ? (quote.receiveNgnMinor / 100) : 0;
+  const impliedRate = quote ? (receiveNgn / Math.max(1, quote.amountXaf)) : null; // NGN per XAF
 
   return (
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-xl mx-auto space-y-6">
-        <PageHeader title="Payment" />
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={() => router.back()} aria-label="Back" className="text-xl">‹</button>
+            <h1 className="text-lg font-semibold">Transfer To Bank Account</h1>
+          </div>
+          <button className="text-sm underline" onClick={() => router.push('/transfers')}>History</button>
+        </div>
         {topError ? (
           <div className="text-sm text-red-600 border border-red-200 rounded p-2">{topError}</div>
         ) : null}
 
-        {/* Summary */}
-        <div className="border rounded p-3 text-sm space-y-1">
-          <div className="font-medium">{accountName || "Recipient"}</div>
-          <div className="text-gray-600">{bankName} • {accountNumber}</div>
-          <div className="pt-2 grid grid-cols-2 gap-2">
-            <div>Amount (XAF): <span className="font-medium">{quote?.amountXaf ?? "—"}</span></div>
-            <div>Receiver (NGN): <span className="text-xl font-semibold">₦ {receiveNgn.toFixed(2)}</span></div>
-            <div>Fees: <span className="font-medium">{quote?.feeTotalXaf ?? 0} XAF</span></div>
-            <div>Total pay: <span className="font-medium">{quote?.totalPayXaf ?? "—"} XAF</span></div>
-            <div className="col-span-2">Rate: <span className="font-medium">1 XAF to NGN {quote?.adjustedRate ?? "—"}</span></div>
-            <div className="col-span-2 text-xs text-gray-600">Quote expires {quote ? new Date(quote.expiresAt).toLocaleTimeString() : "—"} ({ttlSec}s left){requote.isPending ? ' – refreshing…' : ''}</div>
+        {/* Recipient summary */}
+        <section className="bg-gray-50 border rounded-xl p-3 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-xs">{(bankName || '•').slice(0,1).toUpperCase()}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{accountName || "Recipient"}</div>
+            <div className="text-xs text-blue-600 truncate">{accountNumber}</div>
+            <div className="text-xs text-gray-600 truncate">{bankName}</div>
           </div>
-        </div>
+        </section>
+
+        {/* Quote details */}
+        <section className="border rounded-xl p-4 space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div>Amount (XAF): <span className="font-medium">{quote ? nf.format(quote.amountXaf) : '—'}</span></div>
+            <div>Receiver (NGN): <span className="text-lg font-semibold">{ngnFmt.format(receiveNgn)}</span></div>
+            <div>Fees: <span className="font-medium">{quote ? nf.format(quote.feeTotalXaf) : 0} XAF</span></div>
+            <div>Total pay: <span className="font-medium">{quote ? nf.format(quote.totalPayXaf) : '—'} XAF</span></div>
+          </div>
+          {/* Rate line */}
+          {quote ? (
+            <div className="text-xs text-gray-700 flex items-center gap-2">
+              <span className="inline-block h-4 w-4 rounded bg-gray-900" />
+              <span>Rate: 1 XAF = NGN {impliedRate?.toFixed(2)}</span>
+            </div>
+          ) : null}
+          <div className="text-xs text-gray-600 flex items-center gap-2">
+            <span>Quote expires {quote ? new Date(quote.expiresAt).toLocaleTimeString() : '—'} ({ttlSec}s left)</span>
+            {ttlSec <= 0 && (
+              <button type="button" className="underline" disabled={requote.isPending} onClick={() => requote.mutate()}>
+                {requote.isPending ? 'Refreshing…' : 'Refresh rate'}
+              </button>
+            )}
+          </div>
+        </section>
 
         {/* MSISDN */}
         <form
@@ -234,7 +283,14 @@ export default function ConfirmPage() {
               setTopError(v.error || "Invalid phone number");
               return;
             }
-            confirm.mutate({ quoteId: Number(quoteId), bankCode, accountNumber, msisdn: v.normalized });
+            const vars = { quoteId: Number(quoteId), bankCode, accountNumber, msisdn: v.normalized };
+            lastConfirmVarsRef.current = vars;
+            if (Date.now() < cooldownUntil) {
+              setTopError('Please wait a few seconds before trying again.');
+              return;
+            }
+            retried429Ref.current = false; // reset per attempt
+            confirm.mutate(vars);
           }}
         >
           <div>
@@ -261,13 +317,13 @@ export default function ConfirmPage() {
           </div>
           <button
             type="submit"
-            className="w-full text-white px-4 py-2 rounded disabled:opacity-50"
+            className="w-full h-12 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={confirm.isPending || !!transferId}
             style={{
               backgroundColor:
                 payinStatus?.includes('pending') ? '#6b7280' :
                 (payinStatus === 'success' || payinStatus === 'completed') ? '#10b981' :
-                (payinStatus === 'failed') ? '#ef4444' : '#000000'
+                (payinStatus === 'failed') ? '#ef4444' : '#059669' // emerald-600
             }}
           >
             <span className="inline-flex items-center gap-2">
@@ -292,40 +348,7 @@ export default function ConfirmPage() {
           </button>
         </form>
 
-        {/* Processing / USSD guidance */}
-        {transferId && (
-          <div className="border rounded p-3 text-sm space-y-2">
-            <div>Transfer ID: <span className="font-mono">{transferId}</span></div>
-            <div>Status: <span className="font-medium capitalize">{payinStatus || "—"}</span></div>
-            <div className="text-gray-700">If prompted by your operator, dial the USSD to approve:
-              <ul className="list-disc pl-5">
-                <li>MTN: *126#</li>
-                <li>Orange: *150#</li>
-              </ul>
-            </div>
-            <div>
-              <button className="border rounded px-3 py-2 inline-flex items-center gap-2" onClick={() => poll.mutate()} disabled={poll.isPending}>
-                {poll.isPending ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                    </svg>
-                    Checking…
-                  </>
-                ) : "Refresh status"}
-              </button>
-            </div>
-
-            {/* Payout step (frontend sync only) */}
-            {(payinStatus === 'success' || payinStatus === 'completed') && (
-              <div className="border rounded p-3 text-sm space-y-2">
-                <div>Payout status: <span className="font-medium capitalize">{payoutStatus || 'pending'}</span></div>
-                <div className="text-xs text-gray-600">Auto-updating…</div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Processing now handled in /transfer/processing */}
         {confirm.isPending && (
           <div className="mt-3">
             <CardSkeleton lines={2} />

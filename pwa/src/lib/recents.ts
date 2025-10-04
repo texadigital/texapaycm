@@ -1,11 +1,18 @@
 export type RecentRecipient = { bankCode: string; accountNumber: string; accountName?: string; bankName?: string };
 
-const KEY = 'texa:recentRecipients:v1';
+function scopedKey() {
+  if (typeof window === 'undefined') return 'texa:recentRecipients:v1:anon';
+  try {
+    const tok = window.sessionStorage.getItem('accessToken') || '';
+    const suffix = tok ? tok.slice(-8) : 'anon';
+    return `texa:recentRecipients:v1:${suffix}`;
+  } catch { return 'texa:recentRecipients:v1:anon'; }
+}
 
 export function loadRecents(): RecentRecipient[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(scopedKey());
     const list = raw ? JSON.parse(raw) as RecentRecipient[] : [];
     return Array.isArray(list) ? list : [];
   } catch { return []; }
@@ -20,6 +27,11 @@ export function addRecent(r: RecentRecipient) {
     map.set(key(r), r);
     for (const it of list) map.set(key(it), it);
     const merged = Array.from(map.values()).slice(0, 15);
-    localStorage.setItem(KEY, JSON.stringify(merged));
+    localStorage.setItem(scopedKey(), JSON.stringify(merged));
   } catch {}
+}
+
+export function clearRecentsForCurrentUser() {
+  if (typeof window === 'undefined') return;
+  try { localStorage.removeItem(scopedKey()); } catch {}
 }

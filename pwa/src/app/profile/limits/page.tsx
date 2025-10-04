@@ -28,6 +28,12 @@ export default function ProfileLimitsPage() {
   });
 
   const d = q.data;
+  // Fallback snapshot from last quote error, if present
+  let fallback: Partial<LimitsRes> | null = null;
+  try {
+    const raw = sessionStorage.getItem('limits:last');
+    if (raw) fallback = JSON.parse(raw);
+  } catch {}
 
   return (
     <RequireAuth>
@@ -47,6 +53,9 @@ export default function ProfileLimitsPage() {
           <div className="text-sm text-gray-600 border rounded p-3">No limits available.</div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 text-sm">
+            <div className="sm:col-span-2 flex items-center justify-end">
+              <button className="text-xs underline" onClick={() => q.refetch()} disabled={q.isFetching}>{q.isFetching ? 'Refreshing…' : 'Refresh'}</button>
+            </div>
             <div className="border rounded p-3">
               <div className="text-gray-600">Minimum per transfer</div>
               <div className="text-xl font-semibold">{d.minXaf?.toLocaleString() ?? "—"} XAF</div>
@@ -57,14 +66,27 @@ export default function ProfileLimitsPage() {
             </div>
             <div className="border rounded p-3">
               <div className="text-gray-600">Daily cap</div>
-              <div className="text-xl font-semibold">{d.dailyCap?.toLocaleString() ?? "—"} XAF</div>
-              <div className="text-xs text-gray-600">Used today: {d.usedToday?.toLocaleString() ?? 0} • Remaining: {d.remainingXafDay?.toLocaleString() ?? 0}</div>
+              <div className="text-xl font-semibold flex items-center gap-2">
+                {d.dailyCap != null ? `${d.dailyCap.toLocaleString()} XAF` : '— XAF'}
+                {d.dailyCap == null && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">Unconfigured (defaults may apply)</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-600">Used today: {(d.usedToday ?? fallback?.usedToday ?? 0).toLocaleString?.() || String(d.usedToday ?? fallback?.usedToday ?? 0)} • Remaining: {(d.remainingXafDay ?? fallback?.remainingXafDay ?? 0).toLocaleString?.() || String(d.remainingXafDay ?? fallback?.remainingXafDay ?? 0)}</div>
             </div>
             <div className="border rounded p-3">
               <div className="text-gray-600">Monthly cap</div>
-              <div className="text-xl font-semibold">{d.monthlyCap?.toLocaleString() ?? "—"} XAF</div>
-              <div className="text-xs text-gray-600">Used this month: {d.usedMonth?.toLocaleString() ?? 0} • Remaining: {d.remainingXafMonth?.toLocaleString() ?? 0}</div>
+              <div className="text-xl font-semibold flex items-center gap-2">
+                {d.monthlyCap != null ? `${d.monthlyCap.toLocaleString()} XAF` : '— XAF'}
+                {d.monthlyCap == null && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-700">Unconfigured (defaults may apply)</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-600">Used this month: {(d.usedMonth ?? fallback?.usedMonth ?? 0).toLocaleString?.() || String(d.usedMonth ?? fallback?.usedMonth ?? 0)} • Remaining: {(d.remainingXafMonth ?? fallback?.remainingXafMonth ?? 0).toLocaleString?.() || String(d.remainingXafMonth ?? fallback?.remainingXafMonth ?? 0)}</div>
             </div>
+            {fallback?.updatedAt && (
+              <div className="sm:col-span-2 text-xs text-gray-500 text-right">Fallback from last quote update at {new Date(fallback.updatedAt as any).toLocaleTimeString()}</div>
+            )}
           </div>
         )}
       </div>
