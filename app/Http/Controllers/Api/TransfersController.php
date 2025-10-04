@@ -204,6 +204,7 @@ class TransfersController extends Controller
             'accountNumber' => $transfer->recipient_account_number,
             'accountName' => $transfer->recipient_account_name,
             'payerMsisdn' => $transfer->msisdn ?? null,
+            'payerName' => optional($transfer->user)->full_name ?: optional($transfer->user)->name,
             'payinAt' => $transfer->payin_at?->toISOString(),
             'payoutInitiatedAt' => $transfer->payout_initiated_at?->toISOString(),
             'payoutAttemptedAt' => $transfer->payout_attempted_at?->toISOString(),

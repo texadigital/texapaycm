@@ -16,6 +16,7 @@ type TransferDetails = {
   bankName?: string;
   accountNumber?: string;
   payerMsisdn?: string;
+  payerName?: string;
   transactionNo?: string;
   sessionId?: string | null;
   receiptFooterText?: string | null;
@@ -37,16 +38,37 @@ export default function ReceiptPage() {
 
   const pdf = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/mobile/transfers/${id}/receipt.pdf`, { credentials: 'include' });
-      const blob = await res.blob();
+      const node = refCard.current;
+      if (!node) throw new Error('No receipt');
+      const html2canvas = await ensureHtml2Canvas();
+      const jsPDF = await ensureJsPDF();
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/png');
+      // Create a PDF sized to the image (A4 portrait fallback)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth - 48; // margins
+      const ratio = canvas.height / canvas.width;
+      const imgHeight = imgWidth * ratio;
+      let y = 24;
+      if (imgHeight > pageHeight - 48) {
+        // scale down to fit height too
+        const imgHeightFit = pageHeight - 48;
+        const imgWidthFit = imgHeightFit / ratio;
+        pdf.addImage(imgData, 'PNG', (pageWidth - imgWidthFit) / 2, y, imgWidthFit, imgHeightFit, undefined, 'FAST');
+      } else {
+        pdf.addImage(imgData, 'PNG', (pageWidth - imgWidth) / 2, y, imgWidth, imgHeight, undefined, 'FAST');
+      }
+      const blob = pdf.output('blob');
+      const file = new File([blob], `receipt-${id}.pdf`, { type: 'application/pdf' });
+      if ((navigator as any).share && (navigator as any).canShare?.({ files: [file] })) {
+        try { await (navigator as any).share({ files: [file], title: 'Transaction Receipt' }); return true; } catch {}
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `receipt-${id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      a.href = url; a.download = `receipt-${id}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       return true;
     },
   });
@@ -64,6 +86,20 @@ export default function ReceiptPage() {
       document.head.appendChild(s);
     });
     return (window as any).html2canvas;
+  }
+
+  async function ensureJsPDF(): Promise<any> {
+    const w = window as any;
+    if (w.jspdf) return w.jspdf.jsPDF || w.jsPDF;
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load jsPDF'));
+      document.head.appendChild(s);
+    });
+    const w2 = window as any;
+    return w2.jspdf?.jsPDF || w2.jsPDF;
   }
 
   const shareImage = useMutation({
@@ -161,23 +197,23 @@ export default function ReceiptPage() {
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Sender Details</div>
-                  <div className="font-medium">You</div>
+                  <div className="font-medium">{details.data.payerName || '—'}</div>
                   <div className="text-gray-700">MoMo | {maskMsisdn(details.data.payerMsisdn)}</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-6 text-sm">
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Transaction No.</div>
-                  <div className="flex items-center gap-2"><span className="font-mono text-xs">{details.data.transactionNo || details.data.id}</span><span className="text-xs underline cursor-pointer" onClick={() => { try { navigator.clipboard.writeText(String(details.data.transactionNo || details.data.id)); } catch {} }}>Copy</span></div>
+                  <div className="flex items-center gap-2 min-w-0"><span className="font-mono text-xs truncate" title={String(details.data.transactionNo || details.data.id)}>{details.data.transactionNo || details.data.id}</span><span className="text-xs underline cursor-pointer whitespace-nowrap" onClick={() => { try { navigator.clipboard.writeText(String(details.data.transactionNo || details.data.id)); } catch {} }}>Copy</span></div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Session ID</div>
-                  <div className="flex items-center gap-2"><span className="font-mono text-xs">{details.data.sessionId || '—'}</span><span className="text-xs underline cursor-pointer" onClick={() => { if (details.data?.sessionId) { try { navigator.clipboard.writeText(details.data.sessionId); } catch {} } }}>Copy</span></div>
+                  <div className="flex items-center gap-2 min-w-0"><span className="font-mono text-xs truncate" title={details.data.sessionId || '—'}>{details.data.sessionId || '—'}</span><span className="text-xs underline cursor-pointer whitespace-nowrap" onClick={() => { if (details.data?.sessionId) { try { navigator.clipboard.writeText(details.data.sessionId); } catch {} } }}>Copy</span></div>
                 </div>
               </div>
               <hr className="border-dashed" />
               {details.data.receiptFooterText ? (
-                <div className="text-xs text-gray-700">{details.data.receiptFooterText}</div>
+                <div className="text-xs text-gray-700 whitespace-pre-wrap">{details.data.receiptFooterText}</div>
               ) : null}
             </div>
           </div>
