@@ -72,21 +72,144 @@ class TransfersController extends Controller
     }
 
     /**
+     * GET /api/mobile/transactions/feed
+     * Returns a month-grouped transaction feed with in/out totals and labeled rows.
+     * This is presentation-ready for the mobile/PWA UI and does not introduce wallet logic.
+     * Query: page?, perPage? (pagination over transfers before grouping)
+     */
+    public function feed(Request $request)
+    {
+        $userId = Auth::id();
+        $q = Transfer::query()->where('user_id', $userId)->orderByDesc('created_at');
+
+        $per = min(max((int) $request->query('perPage', 50), 1), 200);
+        $p = $q->paginate($per);
+
+        $months = [];
+
+        $humanStatus = function(string $status): string {
+            return match($status) {
+                'payout_success', 'payin_success' => 'Successful',
+                'payin_pending', 'payout_pending', 'processing', 'pending' => 'Pending',
+                'failed', 'payout_failed', 'payin_failed' => 'Failed',
+                default => ucfirst(str_replace('_', ' ', $status)),
+            };
+        };
+
+        foreach ($p->items() as $t) {
+            $monthKey = Carbon::parse($t->created_at)->format('Y-m');
+            $monthLabel = Carbon::parse($t->created_at)->format('MMM Y');
+            if (!isset($months[$monthKey])) {
+                $months[$monthKey] = [
+                    'key' => $monthKey,
+                    'label' => $monthLabel,
+                    'items' => [],
+                    'totals' => [
+                        'inMinor' => 0,
+                        'outMinor' => 0,
+                        'currency' => 'NGN',
+                    ],
+                ];
+            }
+
+            $transferRow = [
+                'id' => 't-' . $t->id,
+                'transferId' => (int) $t->id,
+                'kind' => 'transfer',
+                'direction' => 'out',
+                'label' => 'Transfer to ' . ($t->recipient_account_name ?: 'UNKNOWN'),
+                'at' => Carbon::parse($t->created_at)->toIso8601String(),
+                'status' => (string) $t->status,
+                'statusLabel' => $humanStatus((string) $t->status),
+                'currency' => 'NGN',
+                'amountMinor' => (int) ($t->receive_ngn_minor ?? 0),
+                'sign' => -1,
+                'meta' => [
+                    'bankName' => $t->recipient_bank_name,
+                    'bankCode' => $t->recipient_bank_code,
+                    'accountNumber' => $t->recipient_account_number,
+                ],
+            ];
+            $months[$monthKey]['items'][] = $transferRow;
+            $months[$monthKey]['totals']['outMinor'] += (int) ($t->receive_ngn_minor ?? 0);
+
+            $fee = (int) ($t->fee_total_xaf ?? 0);
+            if ($fee > 0) {
+                $months[$monthKey]['items'][] = [
+                    'id' => 'fee-' . $t->id,
+                    'transferId' => (int) $t->id,
+                    'kind' => 'fee',
+                    'direction' => 'out',
+                    'label' => 'Electronic Money Transfer Levy',
+                    'at' => Carbon::parse($t->created_at)->toIso8601String(),
+                    'status' => (string) $t->status,
+                    'statusLabel' => $humanStatus((string) $t->status),
+                    'currency' => 'XAF',
+                    'amountMinor' => $fee * 100,
+                    'sign' => -1,
+                ];
+            }
+        }
+
+        krsort($months);
+        $monthsArr = array_values($months);
+
+        return response()->json([
+            'months' => $monthsArr,
+            'meta' => [
+                'page' => $p->currentPage(),
+                'perPage' => $p->perPage(),
+                'total' => $p->total(),
+                'lastPage' => $p->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/mobile/transfers/{transfer}
      */
     public function show(Request $request, Transfer $transfer)
     {
         $this->authorizeOwner($transfer);
+        // Compute human-readable FX rate display
+        $adjusted = (float) ($transfer->adjusted_rate_xaf_to_ngn ?? 0);
+        // Show as NGN per XAF100 to avoid tiny decimals
+        $rateDisplay = $adjusted > 0
+            ? sprintf("₦%s / XAF100", number_format($adjusted * 100, 2))
+            : null;
+
+        // Determine a suitable session identifier for bank workflow
+        $sessionId = $transfer->payout_ref
+            ?: ($transfer->name_enquiry_reference ?: $transfer->payin_ref);
+
         return response()->json([
             'id' => $transfer->id,
             'status' => $transfer->status,
             'amountXaf' => (int) $transfer->amount_xaf,
+            'feeTotalXaf' => (int) ($transfer->fee_total_xaf ?? 0),
             'totalPayXaf' => (int) $transfer->total_pay_xaf,
             'receiveNgnMinor' => (int) $transfer->receive_ngn_minor,
+            'adjustedRate' => $transfer->adjusted_rate_xaf_to_ngn,
+            'rateDisplay' => $rateDisplay,
+            'recipientGetsMinor' => (int) $transfer->receive_ngn_minor,
+            'recipientGetsCurrency' => 'NGN',
+            'sourceCurrency' => 'XAF',
+            'targetCurrency' => 'NGN',
             'bankCode' => $transfer->recipient_bank_code,
             'bankName' => $transfer->recipient_bank_name,
             'accountNumber' => $transfer->recipient_account_number,
             'accountName' => $transfer->recipient_account_name,
+            'payerMsisdn' => $transfer->msisdn ?? null,
+            'payinAt' => $transfer->payin_at?->toISOString(),
+            'payoutInitiatedAt' => $transfer->payout_initiated_at?->toISOString(),
+            'payoutAttemptedAt' => $transfer->payout_attempted_at?->toISOString(),
+            'payoutCompletedAt' => $transfer->payout_completed_at?->toISOString(),
+            'payinRef' => $transfer->payin_ref,
+            'payoutRef' => $transfer->payout_ref,
+            'nameEnquiryRef' => $transfer->name_enquiry_reference,
+            'transactionNo' => (string) $transfer->id,
+            'sessionId' => $sessionId,
+            'lastPayoutError' => $transfer->last_payout_error,
             'createdAt' => $transfer->created_at?->toISOString(),
         ]);
     }

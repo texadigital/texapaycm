@@ -94,6 +94,8 @@ Route::middleware([
         // Transfers JSON orchestration
         Route::get('/transfers', [\App\Http\Controllers\Api\TransfersController::class, 'index'])->name('api.mobile.transfers.index');
         Route::get('/transfers/{transfer}', [\App\Http\Controllers\Api\TransfersController::class, 'show'])->name('api.mobile.transfers.show');
+        // Transactions feed (grouped by month with totals and labels)
+        Route::get('/transactions/feed', [\App\Http\Controllers\Api\TransfersController::class, 'feed'])->name('api.mobile.transactions.feed');
         Route::post('/transfers/name-enquiry', [\App\Http\Controllers\Api\TransfersController::class, 'nameEnquiry'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->middleware(['throttle:20,1'])

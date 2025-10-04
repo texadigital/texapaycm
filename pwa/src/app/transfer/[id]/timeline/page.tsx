@@ -7,7 +7,7 @@ import http from "@/lib/api";
 import PageHeader from "@/components/ui/page-header";
 import { CardSkeleton } from "@/components/ui/skeleton";
 
-type TimelineItem = { at: string; message: string };
+type TimelineItem = { at: string; message?: string; state?: string };
 
 type TimelineRes = {
   success: boolean;
@@ -27,10 +27,25 @@ type TransferDetails = {
   totalPayXaf?: number;
   receiveNgnMinor?: number;
   adjustedRate?: number;
+  rateDisplay?: string | null;
+  recipientGetsMinor?: number;
+  recipientGetsCurrency?: string;
+  sourceCurrency?: string;
+  targetCurrency?: string;
   payerMsisdn?: string;
   bankName?: string;
   accountNumber?: string;
   accountName?: string;
+  payinAt?: string | null;
+  payoutInitiatedAt?: string | null;
+  payoutAttemptedAt?: string | null;
+  payoutCompletedAt?: string | null;
+  payinRef?: string | null;
+  payoutRef?: string | null;
+  nameEnquiryRef?: string | null;
+  transactionNo?: string;
+  sessionId?: string | null;
+  lastPayoutError?: string | null;
 };
 
 export default function TransferTimelinePage() {
@@ -75,9 +90,40 @@ export default function TransferTimelinePage() {
     onSuccess: (d) => setPayoutStatus(d.status || null),
   });
 
+  function fmtMoney(minor: number, currency: string) {
+    const divisor = 100;
+    const symbol = currency === "NGN" ? "₦" : currency === "XAF" ? "XAF " : `${currency} `;
+    return `${symbol}${(minor / divisor).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  }
+
+  const statusLabel = React.useMemo(() => {
+    const s = details.data?.status || data?.status || "";
+    const payinOk = !!details.data?.payinAt;
+    const payoutDone = !!details.data?.payoutCompletedAt;
+    const payoutInProgress = !!details.data?.payoutInitiatedAt || !!details.data?.payoutAttemptedAt;
+    if (s.includes('failed')) return 'Failed';
+    if (payinOk && payoutDone) return 'Successful';
+    if (payinOk && payoutInProgress) return 'Pending';
+    return s ? s.replaceAll('_',' ') : 'Pending';
+  }, [details.data, data]);
+
+  const stepTimes = {
+    payin: details.data?.payinAt || null,
+    processing: details.data?.payoutInitiatedAt || details.data?.payoutAttemptedAt || null,
+    received: details.data?.payoutCompletedAt || null,
+  };
+
+  const ngnMinor = details.data?.recipientGetsMinor ?? details.data?.receiveNgnMinor ?? 0;
+  const ngnAmount = fmtMoney(ngnMinor, details.data?.recipientGetsCurrency || 'NGN');
+
+  function copy(text?: string | null) {
+    if (!text) return;
+    try { navigator.clipboard.writeText(text); } catch {}
+  }
+
   return (
     <div className="min-h-dvh p-6 max-w-2xl mx-auto space-y-4">
-      <PageHeader title="Transfer timeline">
+      <PageHeader title="Transaction Details">
         <button className="border rounded px-3 py-1" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? "Refreshing..." : "Refresh"}
         </button>
@@ -96,60 +142,118 @@ export default function TransferTimelinePage() {
       )}
 
       {data && (
-        <div className="space-y-3">
-          {/* Details */}
-          <div className="border rounded p-3 text-sm space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="font-medium">Ref: {details.data?.reference || `#${id}`}</div>
-              <div className="text-xs text-gray-600"><span suppressHydrationWarning>{details.data?.createdAt ? new Date(details.data.createdAt).toLocaleString() : null}</span></div>
-            </div>
-            <div className="text-gray-700">Status: <span className="font-medium capitalize">{details.data?.status || data.status}</span></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>Amount (XAF): <span className="font-medium">{details.data?.amountXaf?.toLocaleString() ?? "—"}</span></div>
-              <div>Fees (XAF): <span className="font-medium">{details.data?.feeTotalXaf?.toLocaleString() ?? 0}</span></div>
-              <div>Total pay (XAF): <span className="font-medium">{details.data?.totalPayXaf?.toLocaleString() ?? "—"}</span></div>
-              <div>Receiver (NGN): <span className="font-medium">{details.data?.receiveNgnMinor ? (details.data.receiveNgnMinor/100).toFixed(2) : "—"}</span></div>
-              <div className="col-span-2">Rate: <span className="font-medium">1 XAF → NGN {details.data?.adjustedRate ?? "—"}</span></div>
-            </div>
-            <div className="pt-1">Recipient: <span className="font-medium">{details.data?.accountName || "—"}</span></div>
-            <div className="text-gray-700">Bank: {details.data?.bankName || "—"} • {details.data?.accountNumber || "—"}</div>
-            <div className="text-gray-700">Payer: {details.data?.payerMsisdn || "—"}</div>
-            <div className="pt-2 flex items-center gap-2">
-              <Link className="border rounded px-3 py-1" href={`/transfer/${id}/receipt`}>Receipt</Link>
-              <Link className="border rounded px-3 py-1" href={`/transfer/${id}/payout`}>Payout</Link>
+        <div className="space-y-4">
+          {/* Header card */}
+          <div className="rounded border p-4 text-center space-y-2">
+            <div className="text-sm text-gray-600">Transfer to {details.data?.accountName || '—'}</div>
+            <div className="text-2xl font-extrabold">{ngnAmount}</div>
+            <div className={`inline-block text-xs px-2 py-0.5 rounded ${statusLabel === 'Successful' ? 'bg-emerald-50 text-emerald-700' : statusLabel === 'Failed' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>{statusLabel}</div>
+            {/* Steps */}
+            <div className="pt-4 grid grid-cols-3 gap-2 text-sm">
+              {[
+                { key: 'Payment successful', time: stepTimes.payin },
+                { key: 'Processing by bank', time: stepTimes.processing },
+                { key: 'Received by bank', time: stepTimes.received },
+              ].map((s, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-1">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${s.time ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{s.time ? '✓' : '•'}</div>
+                  <div className="text-center text-xs text-gray-700 leading-tight">
+                    <div>{s.key}</div>
+                    <div className="text-gray-500" suppressHydrationWarning>{s.time ? new Date(s.time).toLocaleString() : '—'}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="text-sm">Status: <span className="font-medium capitalize">{data.status}</span></div>
-          <div className="text-sm">Pay‑in: <span className="capitalize">{data.payinStatus || "—"}</span>; Payout: <span className="capitalize">{data.payoutStatus || "—"}</span></div>
-          {(data.payinStatus === 'success' || data.status === 'completed') && (
-            <div className="border rounded p-3 text-sm space-y-2">
-              <div>Payout status: <span className="font-medium capitalize">{payoutStatus || data.payoutStatus || 'not started'}</span></div>
-              {!payoutStatus && !data.payoutStatus ? (
-                <button className="bg-black text-white px-3 py-2 rounded disabled:opacity-50" onClick={() => payout.mutate()} disabled={payout.isPending}>
-                  {payout.isPending ? 'Starting payout…' : 'Initiate payout'}
-                </button>
-              ) : (
-                <button className="border rounded px-3 py-1" onClick={() => payoutPoll.mutate()} disabled={payoutPoll.isPending}>
-                  {payoutPoll.isPending ? 'Checking…' : 'Refresh payout status'}
-                </button>
-              )}
-            </div>
-          )}
-          <div className="border rounded divide-y">
-            {data.timeline.length === 0 ? (
-              <div className="p-3 text-sm text-gray-600">No events yet.</div>
-            ) : (
-              data.timeline.map((t, i) => (
-                <div key={i} className="p-3 text-sm flex items-start justify-between gap-3">
-                  <div className="font-medium">
-                    {t.message?.trim() || (data.payinStatus === 'success' && i === 0 ? 'Pay‑in confirmed' : data.status?.replaceAll('_', ' ') || 'Update')}
-                  </div>
-                  <div className="text-xs text-gray-600 whitespace-nowrap"><span suppressHydrationWarning>{new Date(t.at).toLocaleString()}</span></div>
-                </div>
-              ))
-            )}
+          {/* Info note bubble */}
+          <div className="rounded border p-3 text-xs text-gray-700 bg-gray-50">
+            The recipient account is expected to be credited within 5 minutes, subject to notification by the bank.
           </div>
+
+          {/* Amount box */}
+          <div className="rounded border p-3 text-sm">
+            <div className="flex items-center justify-between py-1">
+              <div>Amount</div>
+              <div className="font-semibold">{details.data?.amountXaf?.toLocaleString()} XAF</div>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <div>Fee</div>
+              <div className="font-semibold">{(details.data?.feeTotalXaf ?? 0).toLocaleString()} XAF</div>
+            </div>
+            <div className="flex items-center justify-between py-1">
+              <div>Amount Paid</div>
+              <div className="font-semibold">{details.data?.totalPayXaf?.toLocaleString()} XAF</div>
+            </div>
+            {details.data?.rateDisplay ? (
+              <div className="flex items-center justify-between py-1">
+                <div>Exchange Rate Used</div>
+                <div className="font-semibold">{details.data.rateDisplay}</div>
+              </div>
+            ) : null}
+            {ngnMinor ? (
+              <div className="flex items-center justify-between py-1">
+                <div>Recipient Gets</div>
+                <div className="font-semibold">{fmtMoney(ngnMinor, details.data?.recipientGetsCurrency || 'NGN')}</div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Transaction Details */}
+          <div className="rounded border p-3 text-sm space-y-2">
+            <div>
+              <div className="text-xs text-gray-500">Recipient Details</div>
+              <div className="font-medium">{details.data?.accountName || '—'}</div>
+              <div className="text-gray-700">{details.data?.bankName || '—'} | {details.data?.accountNumber || '—'}</div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-gray-700">Transaction No.</div>
+              <div className="flex items-center gap-2">
+                <div className="font-mono text-xs">{details.data?.transactionNo || details.data?.id}</div>
+                <button className="text-xs underline" onClick={() => copy(details.data?.transactionNo || String(details.data?.id))}>Copy</button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-gray-700">Payment Method</div>
+              <div className="font-medium">Mobile Money</div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-gray-700">Transaction Date</div>
+              <div className="font-medium" suppressHydrationWarning>{details.data?.createdAt ? new Date(details.data.createdAt).toLocaleString() : '—'}</div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-gray-700">Session ID</div>
+              <div className="flex items-center gap-2">
+                <div className="font-mono text-xs">{details.data?.sessionId || '—'}</div>
+                <button className="text-xs underline" onClick={() => copy(details.data?.sessionId || undefined)}>Copy</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="rounded border p-3 text-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>Category</div>
+              <div className="text-gray-700">Transfer</div>
+            </div>
+            <div>
+              <Link
+                href={`/transfer/verify?${new URLSearchParams({ bankCode: details.data?.bankName ? ('' + (details.data as any).bankCode) : (details.data as any)?.bankCode || '', bankName: details.data?.bankName || '', account: details.data?.accountNumber || '', accountName: details.data?.accountName || '' }).toString()}`}
+                className="inline-flex items-center gap-1 text-emerald-700"
+              >
+                <span>＋</span>
+                <span>Transfer Again</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <Link href={`/transfer/${id}/support`} className="flex-1 border rounded px-3 py-2 text-center">Report Issue</Link>
+            <Link href={`/transfer/${id}/receipt`} className="flex-1 bg-black text-white rounded px-3 py-2 text-center">Share Receipt</Link>
+          </div>
+          {details.data?.lastPayoutError ? (
+            <div className="text-xs text-rose-700 border border-rose-200 rounded p-2">{details.data.lastPayoutError}</div>
+          ) : null}
         </div>
       )}
     </div>

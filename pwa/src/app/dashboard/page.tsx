@@ -19,6 +19,23 @@ type DashboardResponse = {
   }>;
 };
 
+// Feed types (subset) to render Recent Transfers using /transactions/feed
+type FeedItem = {
+  id: string;
+  transferId: number;
+  kind: "transfer" | "fee" | "interest";
+  direction: "in" | "out";
+  label: string;
+  at: string;
+  status: string;
+  statusLabel: string;
+  currency: string;
+  amountMinor: number;
+  sign: -1 | 1;
+};
+type FeedMonth = { key: string; label: string; items: FeedItem[]; totals: { inMinor: number; outMinor: number; currency: string } };
+type FeedRes = { months: FeedMonth[]; meta?: { page?: number; perPage?: number; lastPage?: number } };
+
 export default function DashboardPage() {
   const [enabled, setEnabled] = React.useState<boolean>(() => !!getAccessToken());
 
@@ -52,6 +69,32 @@ export default function DashboardPage() {
     gcTime: 5 * 60_000,
     retry: 1,
   });
+
+  // Recent feed for dashboard (page 1 only, small perPage)
+  const feedQ = useQuery<FeedRes>({
+    queryKey: ["dashboard-feed"],
+    queryFn: async () => {
+      const res = await http.get("/api/mobile/transactions/feed", { params: { page: 1, perPage: 10 } });
+      return res.data as FeedRes;
+    },
+    enabled,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    retry: 1,
+  });
+
+  const recentItems: FeedItem[] = React.useMemo(() => {
+    const months = feedQ.data?.months ?? [];
+    const all = months.flatMap((m) => m.items);
+    // Prefer showing only transfer rows (exclude levy/interest) for dashboard recents
+    return all.filter((it) => it.kind === "transfer").slice(0, 5);
+  }, [feedQ.data]);
+
+  const formatMoney = (minor: number, currency: string) => {
+    const divisor = 100; // NGN and XAF provided in minor for feed
+    const symbol = currency === "NGN" ? "₦" : currency === "XAF" ? "XAF " : `${currency} `;
+    return `${symbol}${(minor / divisor).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  };
 
   // Auto-refresh when success page broadcasts completion
   React.useEffect(() => {
@@ -120,32 +163,37 @@ export default function DashboardPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">Recent Transfers</h2>
-            {(data.recentTransfers?.length ?? 0) === 0 ? (
+            {feedQ.isLoading ? (
+              <div className="space-y-2">
+                <CardSkeleton lines={2} />
+              </div>
+            ) : (recentItems.length === 0) ? (
               <div className="space-y-2">
                 <div className="text-sm text-gray-600">No recent transfers.</div>
                 <Link href="/transfer/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start your first transfer</Link>
               </div>
             ) : (
               <div className="border rounded divide-y">
-                {(data.recentTransfers ?? []).map((t) => (
-                  <Link key={t.id} href={`/transfer/${t.id}/timeline`} className="block p-3">
+                {recentItems.map((it) => (
+                  <Link key={it.id} href={`/transfer/${it.transferId}/timeline`} className="block p-3">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium">#{t.id}</div>
-                        <div className="text-xs text-gray-600">
-                          <span suppressHydrationWarning>{t.createdAt ? new Date(t.createdAt).toLocaleString() : "—"}</span>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 flex items-center justify-center rounded-full bg-gray-100 text-black text-xs`}>{it.sign === -1 ? "↑" : "↓"}</div>
+                        <div>
+                          <div className="font-medium line-clamp-1" title={it.label}>{it.label}</div>
+                          <div className="text-xs text-gray-600" suppressHydrationWarning>{it.at ? new Date(it.at).toLocaleString() : ""}</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm">{t.amountXaf} XAF</div>
-                        <div className="text-xs capitalize text-gray-600">{t.status}</div>
+                        <div className="text-sm font-semibold text-black">{(it.sign === -1 ? "-" : "+")}{formatMoney(Math.abs(it.amountMinor), it.currency)}</div>
+                        <div className="text-xs text-gray-600">{it.statusLabel}</div>
                       </div>
                     </div>
                   </Link>
                 ))}
               </div>
             )}
-            {((data.recentTransfers?.length ?? 0) > 0) && (
+            {(recentItems.length > 0) && (
               <div className="pt-2">
                 <Link href="/transfer/verify" className="inline-block border rounded px-3 py-1 text-sm">New transfer</Link>
               </div>
