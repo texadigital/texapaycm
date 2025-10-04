@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import PageHeader from "@/components/ui/page-header";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import http from "@/lib/api";
@@ -43,6 +44,7 @@ export default function ConfirmPage() {
   const [topError, setTopError] = React.useState<string | null>(null);
   const [payinStatus, setPayinStatus] = React.useState<string | null>(null);
   const [payoutStatus, setPayoutStatus] = React.useState<string | null>(null);
+  const [autoPayoutStarted, setAutoPayoutStarted] = React.useState(false);
 
   function formatLimitError(e: any): string {
     const d = e?.response?.data || {};
@@ -76,16 +78,6 @@ export default function ConfirmPage() {
   });
 
   // Payout initiation and polling
-  const payout = useMutation({
-    mutationFn: async () => {
-      if (!transferId) return { status: "" } as StatusRes;
-      const res = await http.post(`/api/mobile/transfers/${transferId}/payout`);
-      return res.data as StatusRes;
-    },
-    onSuccess: (d) => setPayoutStatus(d.status || "pending"),
-    onError: (e: any) => setTopError(e?.response?.data?.message || e.message),
-  });
-
   const payoutPoll = useMutation({
     mutationFn: async () => {
       if (!transferId) return { status: "" } as StatusRes;
@@ -157,6 +149,17 @@ export default function ConfirmPage() {
     }
   }, [transferId, payoutStatus]);
 
+  // Auto-sync payout status (backend initiates); poll until terminal
+  React.useEffect(() => {
+    if (!transferId) return;
+    const ok = (payinStatus === 'success' || payinStatus === 'completed');
+    if (!ok) return;
+    const terminal = (payoutStatus === 'success' || payoutStatus === 'completed' || payoutStatus === 'failed' || payoutStatus === 'error');
+    if (terminal) return;
+    const id = setInterval(() => payoutPoll.mutate(), 3000);
+    return () => clearInterval(id);
+  }, [transferId, payinStatus, payoutStatus]);
+
   // Load selected quote + recipient from sessionStorage (short URL)
   React.useEffect(() => {
     try {
@@ -202,7 +205,7 @@ export default function ConfirmPage() {
   return (
     <RequireAuth>
       <div className="min-h-dvh p-6 max-w-xl mx-auto space-y-6">
-        <h1 className="text-2xl font-semibold">Payment</h1>
+        <PageHeader title="Payment" />
         {topError ? (
           <div className="text-sm text-red-600 border border-red-200 rounded p-2">{topError}</div>
         ) : null}
@@ -314,19 +317,11 @@ export default function ConfirmPage() {
               </button>
             </div>
 
-            {/* Payout step */}
+            {/* Payout step (frontend sync only) */}
             {(payinStatus === 'success' || payinStatus === 'completed') && (
-              <div className="mt-3 border-t pt-3">
-                <div className="mb-2">Payout status: <span className="font-medium capitalize">{payoutStatus || 'not started'}</span></div>
-                {!payoutStatus ? (
-                  <button className="bg-black text-white px-3 py-2 rounded disabled:opacity-50" onClick={() => payout.mutate()} disabled={payout.isPending}>
-                    {payout.isPending ? 'Starting payout…' : 'Initiate payout'}
-                  </button>
-                ) : (
-                  <button className="border rounded px-3 py-2 inline-flex items-center gap-2" onClick={() => payoutPoll.mutate()} disabled={payoutPoll.isPending}>
-                    {payoutPoll.isPending ? 'Checking payout…' : 'Refresh payout status'}
-                  </button>
-                )}
+              <div className="border rounded p-3 text-sm space-y-2">
+                <div>Payout status: <span className="font-medium capitalize">{payoutStatus || 'pending'}</span></div>
+                <div className="text-xs text-gray-600">Auto-updating…</div>
               </div>
             )}
           </div>

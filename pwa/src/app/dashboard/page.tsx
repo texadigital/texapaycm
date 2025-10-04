@@ -52,15 +52,20 @@ export default function DashboardPage() {
   return (
     <RequireAuth>
     <div className="min-h-dvh p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <button
-          onClick={() => refetch()}
-          className="text-sm border rounded px-3 py-1"
-          disabled={isFetching}
-        >
-          {isFetching ? "Refreshing..." : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/transfer/verify" className="bg-black text-white text-sm px-3 py-1.5 rounded">
+            New transfer
+          </Link>
+          <button
+            onClick={() => refetch()}
+            className="text-sm border rounded px-3 py-1"
+            disabled={isFetching}
+          >
+            {isFetching ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {isLoading && (
@@ -99,7 +104,10 @@ export default function DashboardPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">Recent Transfers</h2>
             {(data.recentTransfers?.length ?? 0) === 0 ? (
-              <div className="text-sm text-gray-600">No recent transfers.</div>
+              <div className="space-y-2">
+                <div className="text-sm text-gray-600">No recent transfers.</div>
+                <Link href="/transfer/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start your first transfer</Link>
+              </div>
             ) : (
               <div className="border rounded divide-y">
                 {(data.recentTransfers ?? []).map((t) => (
@@ -108,7 +116,7 @@ export default function DashboardPage() {
                       <div>
                         <div className="font-medium">#{t.id}</div>
                         <div className="text-xs text-gray-600">
-                          {t.createdAt ? new Date(t.createdAt).toLocaleString() : "—"}
+                          <span suppressHydrationWarning>{t.createdAt ? new Date(t.createdAt).toLocaleString() : "—"}</span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -118,6 +126,11 @@ export default function DashboardPage() {
                     </div>
                   </Link>
                 ))}
+              </div>
+            )}
+            {((data.recentTransfers?.length ?? 0) > 0) && (
+              <div className="pt-2">
+                <Link href="/transfer/verify" className="inline-block border rounded px-3 py-1 text-sm">New transfer</Link>
               </div>
             )}
           </section>

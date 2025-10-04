@@ -69,7 +69,7 @@ export default function ReceiptPage() {
             Open receipt
           </a>
           {data.expires_at ? (
-            <div className="text-gray-600">Expires: {new Date(data.expires_at).toLocaleString()}</div>
+            <div className="text-gray-600">Expires: <span suppressHydrationWarning>{new Date(data.expires_at).toLocaleString()}</span></div>
           ) : null}
           <div className="pt-2 flex gap-2">
             <button className="border rounded px-3 py-1" onClick={() => pdf.mutate()} disabled={pdf.isPending}>Download PDF</button>

@@ -8,10 +8,13 @@ import http from "@/lib/api";
 export default function TopBar() {
   const pathname = usePathname();
   const onAuthPage = pathname?.startsWith('/auth');
-  const [hasToken, setHasToken] = React.useState<boolean>(!!getAccessToken());
+  // Start false on server to avoid hydration mismatch; update after mount
+  const [hasToken, setHasToken] = React.useState<boolean>(false);
 
   React.useEffect(() => {
-    const handler = () => setHasToken(!!getAccessToken());
+    const read = () => setHasToken(!!getAccessToken());
+    read();
+    const handler = () => read();
     window.addEventListener('storage', handler);
     window.addEventListener('auth:unauthorized', handler as any);
     window.addEventListener('notifications:refresh', handler as any);

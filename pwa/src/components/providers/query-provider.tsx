@@ -17,7 +17,7 @@ export default function QueryProvider({ children }: Props) {
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,
             retry: 1,
-            placeholderData: (prev) => prev,
+            placeholderData: (prev: unknown) => prev,
           },
         },
       })
