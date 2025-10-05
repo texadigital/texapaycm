@@ -19,6 +19,16 @@ type QuoteRes = {
     receiveNgnMinor: number;
     adjustedRate: number;
     expiresAt: string;
+    ttlSeconds?: number;
+    rateDisplay?: string | null;
+    components?: {
+      fxMarginBps?: number | null;
+      percentBps?: number | null;
+      fixedFeeXaf?: number | null;
+      percentFeeXaf?: number | null;
+      levyXaf?: number | null;
+      totalFeeXaf?: number | null;
+    } | null;
   };
 };
 
@@ -49,6 +59,7 @@ function QuoteInner() {
   const controllerRef = React.useRef<AbortController | null>(null);
   const lastKeyRef = React.useRef<string>("");
   const [rateLimitedUntil, setRateLimitedUntil] = React.useState<number>(0);
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Number formatters
   const nf = React.useMemo(() => new Intl.NumberFormat('en-NG'), []);
@@ -100,10 +111,12 @@ function QuoteInner() {
     },
     onError: (e: any) => {
       if (e?.response?.status === 429) {
-        // Enter short cooldown window to avoid hammering
-        const until = Date.now() + 12000; // 12s
+        // Respect Retry-After header if present
+        const raHdr = e?.response?.headers?.['retry-after'];
+        const ra = Math.max(5, Math.min(120, Number(raHdr) || Number(e?.response?.data?.retryAfterSeconds) || 12));
+        const until = Date.now() + ra * 1000;
         setRateLimitedUntil(until);
-        setErr("Please wait a few seconds before trying again.");
+        setErr(`Please wait ${ra}s before trying again.`);
       } else {
         // Persist structured limits if present for the Limits page fallback
         try {
@@ -125,6 +138,21 @@ function QuoteInner() {
       }
     },
   });
+
+  // Debounced auto-quote on valid input changes (fintech-style: live pricing)
+  React.useEffect(() => {
+    if (!amount || !bankCode || !account) return;
+    if (Date.now() < rateLimitedUntil) return;
+    const key = `${bankCode}:${account}:${amount}`;
+    if (lastKeyRef.current === key && quoteRes?.quote) return; // no change
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      lastKeyRef.current = key;
+      quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account });
+    }, 450);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amount, bankCode, account, rateLimitedUntil]);
 
   // Fetch lightweight FX preview for instant calculation (NGN per XAF)
   React.useEffect(() => {
@@ -202,7 +230,16 @@ function QuoteInner() {
     return () => clearInterval(id);
   }, [quoteRes?.quote?.expiresAt]);
 
-  // No auto re-quote. When expired, we simply show TTL=0 and require user to get a new quote on Next.
+  // Auto-refresh shortly before expiry when user is idle on this screen
+  React.useEffect(() => {
+    if (!quoteRes?.quote || ttlSec <= 0) return;
+    if (ttlSec <= 5 && !quote.isPending && Date.now() >= rateLimitedUntil) {
+      setAutoRefreshing(true);
+      quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account }, {
+        onSettled: () => setAutoRefreshing(false)
+      });
+    }
+  }, [ttlSec, quoteRes?.quote, amount, bankCode, account, rateLimitedUntil]);
 
   function proceed() {
     const go = (qr: QuoteRes) => {
@@ -214,10 +251,10 @@ function QuoteInner() {
       const s = new URLSearchParams({ quoteId: String(qr.quote.id) });
       router.push(`/transfer/confirm?${s.toString()}`);
     };
-    // If we already have a valid quote, proceed immediately
+    // Require a fresh, valid quote to proceed (common fintech pattern)
     if (quoteRes?.quote && ttlSec > 0) { go(quoteRes); return; }
-    // Otherwise fetch one quote now (preview-only pattern)
     if (Date.now() < rateLimitedUntil) { setErr('Please wait a few seconds before trying again.'); return; }
+    // Force-refresh and proceed on success
     quote.mutate({ amountXaf: Number(amount), bankCode, accountNumber: account }, { onSuccess: (d) => go(d) });
   }
   const receiveNgn = quoteRes?.quote?.receiveNgnMinor ? (quoteRes.quote.receiveNgnMinor / 100).toFixed(2) : "0.00";
@@ -302,8 +339,11 @@ function QuoteInner() {
             <div className="text-xs text-gray-700 flex items-center gap-2">
               <span className="inline-block h-4 w-4 rounded bg-gray-900" />
               <span>
-                Rate: 1 XAF = NGN {impliedRate}
+                {`Rate: 1 XAF = NGN ${(quoteRes.quote.adjustedRate ?? 0).toFixed(2)}`}
               </span>
+              {quoteRes.quote.components?.fxMarginBps != null && (
+                <span className="text-gray-500">(margin {quoteRes.quote.components.fxMarginBps} bps)</span>
+              )}
             </div>
           ) : (
             previewRate ? (
@@ -329,12 +369,40 @@ function QuoteInner() {
               <div className="text-xs text-gray-600">Quote expires {new Date(quoteRes.quote.expiresAt).toLocaleTimeString()} ({ttlSec}s left){autoRefreshing ? ' – refreshing…' : ''}</div>
             ) : null}
           </div>
+          {/* Basic fee breakdown */}
+          {quoteRes?.quote ? (
+            <div className="rounded-md border p-3 text-xs text-gray-700 space-y-1">
+              <div className="flex justify-between"><span>Send amount</span><span>XAF {nf.format(quoteRes.quote.amountXaf)}</span></div>
+              {(() => {
+                const c = quoteRes.quote.components || {} as any;
+                const fixed = c.fixedFeeXaf ?? null;
+                const percent = c.percentFeeXaf ?? null;
+                const percentBps = c.percentBps ?? null;
+                if (fixed != null || percent != null) {
+                  return (
+                    <>
+                      {fixed != null && (
+                        <div className="flex justify-between"><span>Flat fee</span><span>XAF {nf.format(fixed)}</span></div>
+                      )}
+                      {percent != null && (
+                        <div className="flex justify-between"><span>Percent fee{percentBps!=null?` (${(percentBps/100).toFixed(2)}%)`:''}</span><span>XAF {nf.format(percent)}</span></div>
+                      )}
+                    </>
+                  );
+                }
+                return null;
+              })()}
+              <div className="flex justify-between"><span>Fees</span><span>XAF {nf.format(quoteRes.quote.feeTotalXaf)}</span></div>
+              <div className="flex justify-between"><span>Total to pay</span><span className="font-medium">XAF {nf.format(quoteRes.quote.totalPayXaf)}</span></div>
+              <div className="flex justify-between"><span>Effective rate</span><span>{`1 XAF = NGN ${(quoteRes.quote.adjustedRate ?? 0).toFixed(2)}`}</span></div>
+            </div>
+          ) : null}
           <button
             className="w-full h-12 rounded-full bg-emerald-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
-            disabled={quote.isPending || !amount}
+            disabled={quote.isPending || !amount || !quoteRes?.quote || ttlSec <= 0}
             onClick={proceed}
           >
-            Next
+            {ttlSec <= 0 && amount ? 'Get fresh quote' : 'Next'}
           </button>
         </section>
       </div>

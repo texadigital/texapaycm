@@ -62,11 +62,12 @@ export default function LoginPage() {
         const accepted = !!(res?.data?.accepted);
         if (!accepted) {
           const qp = new URLSearchParams({ next: nextUrl || '/dashboard' });
-          window.location.href = `/policies/accept?${qp.toString()}`;
+          window.location.replace(`/policies/accept?${qp.toString()}`);
           return;
         }
       } catch {}
-      window.location.href = nextUrl || "/dashboard";
+      // Use replace so Back does not land on login again after a session timeout re-login
+      window.location.replace(nextUrl || "/dashboard");
     },
   });
 

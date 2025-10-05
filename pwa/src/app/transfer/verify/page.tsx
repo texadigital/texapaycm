@@ -47,6 +47,10 @@ function VerifyRecipientInner() {
   const [tab, setTab] = React.useState<'recents'|'favourites'>("recents");
   const [search, setSearch] = React.useState("");
   const [mounted, setMounted] = React.useState(false);
+  // Rate-limit / cooldown handling
+  const [cooldownUntil, setCooldownUntil] = React.useState<number>(0);
+  const [cooldownLeft, setCooldownLeft] = React.useState<number>(0);
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const nameEnquiry = useMutation({
     mutationFn: async () => {
@@ -60,7 +64,11 @@ function VerifyRecipientInner() {
       const keyNow = bankCode + ":" + account.trim();
       if (keyNow !== lastNEKey) { return; }
       setNe(d);
+      setCooldownUntil(0);
+      setCooldownLeft(0);
       if (d?.accountName) {
+        // Persist NE reference for continuity into quote/confirm
+        try { if (d?.reference) sessionStorage.setItem(`ne:ref:${bankCode}:${account.trim()}`, d.reference); } catch {}
         addRecent({ bankCode, bankName, accountNumber: account, accountName: d.accountName });
         setVerifiedKey(keyNow);
         setStatusMsg(`Verified ${d.accountName}`);
@@ -72,6 +80,13 @@ function VerifyRecipientInner() {
       const msg = e?.response?.data?.message || e.message;
       setError(msg);
       if (isUnauthorizedErr(e)) setUnauthorized(true);
+      // Handle throttling gracefully
+      const status = e?.response?.status;
+      if (status === 429 || /too many/i.test(String(msg))) {
+        const ra = Number(e?.response?.headers?.['retry-after']) || 15; // seconds fallback
+        const until = Date.now() + Math.max(5, Math.min(120, ra)) * 1000;
+        setCooldownUntil(until);
+      }
     },
   });
 
@@ -137,6 +152,15 @@ function VerifyRecipientInner() {
     return () => window.removeEventListener('auth:unauthorized', onUnauthorized as any);
   }, []);
 
+  // Cooldown countdown tick
+  React.useEffect(() => {
+    if (cooldownUntil <= Date.now()) { setCooldownLeft(0); return; }
+    const tick = () => setCooldownLeft(Math.max(0, Math.ceil((cooldownUntil - Date.now())/1000)));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
+
   // Persist/restore form state
   React.useEffect(() => {
     // restore once
@@ -193,7 +217,12 @@ function VerifyRecipientInner() {
             Your session has expired. Please <Link className="underline" href="/auth/login">log in</Link> and try again.
           </div>
         )}
-        {error ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{error}</div> : null}
+        {cooldownLeft > 0 ? (
+          <div className="text-sm text-orange-700 border border-orange-200 rounded p-2">
+            Too many attempts. Please wait {cooldownLeft}s before trying again.
+          </div>
+        ) : null}
+        {error && cooldownLeft === 0 ? <div className="text-sm text-red-600 border border-red-200 rounded p-2">{error}</div> : null}
         {/* Recipient Account card */}
         <section className="border rounded-xl p-4 space-y-3">
           <div className="text-sm font-medium">Recipient Account</div>
@@ -212,7 +241,30 @@ function VerifyRecipientInner() {
               placeholder="Enter 10 digits Account Number"
               aria-describedby="acct-help"
             />
-            <div id="acct-help" className="text-xs text-gray-600 mt-1">Enter 10 digits Account Number</div>
+            <div id="acct-help" className="text-xs text-gray-600 mt-1 flex items-center gap-2">
+              <span>Enter 10 digits Account Number</span>
+              {ne?.accountName && (bankCode+":"+account.trim())===verifiedKey && (
+                <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  Verified
+                </span>
+              )}
+            </div>
+            {/* Provider-friendly message */}
+            {error && (
+              <div className="text-xs text-gray-600 mt-1">
+                {(() => {
+                  const d = (nameEnquiry as any)?.failureReason || {};
+                  const raw = (undefined as any);
+                  const code = (null as any);
+                  // We already show the top red banner. Here add sandbox hint when applicable.
+                  if (/sandbox/i.test(String(error)) || /restriction/i.test(String(error))) {
+                    return 'Tip: For sandbox, use SAFE HAVEN SANDBOX BANK and valid test accounts.';
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
             {suggestBusy && <div className="text-xs text-gray-500 mt-1">Checking bank suggestions…</div>}
           </div>
           {/* Bank row */}
@@ -248,6 +300,15 @@ function VerifyRecipientInner() {
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
                   {ne.accountName}
                 </span>
+              )}
+              {!nameEnquiry.isPending && !ne?.accountName && !!bankCode && account.trim().length>=10 && cooldownLeft===0 && (
+                <button
+                  type="button"
+                  className="ml-2 text-xs underline text-gray-700"
+                  onClick={() => { setLastNEKey(bankCode+":"+account.trim()); nameEnquiry.mutate(); }}
+                >
+                  Verify now
+                </button>
               )}
             </div>
           </div>

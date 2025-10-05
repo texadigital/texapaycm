@@ -173,9 +173,9 @@ class TransfersController extends Controller
         $this->authorizeOwner($transfer);
         // Compute human-readable FX rate display
         $adjusted = (float) ($transfer->adjusted_rate_xaf_to_ngn ?? 0);
-        // Show as NGN per XAF100 to avoid tiny decimals
+        // Display as 1 XAF = NGN {rate}
         $rateDisplay = $adjusted > 0
-            ? sprintf("₦%s / XAF100", number_format($adjusted * 100, 2))
+            ? sprintf("1 XAF = NGN %s", number_format($adjusted, 2))
             : null;
 
         // Determine a suitable session identifier for bank workflow
@@ -321,6 +321,15 @@ class TransfersController extends Controller
             $amountXaf = (int) round($data['amountXaf']);
 
             $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
+            // Components for UI transparency (best-effort; fields may be null under pricing v2)
+            $components = [
+                'fxMarginBps' => null,
+                'percentBps' => null,
+                'fixedFeeXaf' => null,
+                'percentFeeXaf' => null,
+                'levyXaf' => null,
+                'totalFeeXaf' => null,
+            ];
             if ($pricingV2) {
                 $engine = app(PricingEngine::class);
                 $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
@@ -330,6 +339,9 @@ class TransfersController extends Controller
                 $feeTotal = (int) $calc['fee_amount_xaf'];
                 $totalPayXaf = (int) $calc['total_pay_xaf'];
                 $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
+                // Surface known knobs to UI if available in admin settings
+                $components['fxMarginBps'] = (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0));
+                $components['totalFeeXaf'] = $feeTotal;
             } else {
                 $marginBps = (int) (env('FX_MARGIN_BPS', 0));
                 $adjustedRate = $cross * (1 - ($marginBps / 10000));
@@ -341,6 +353,12 @@ class TransfersController extends Controller
                 $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
                 $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
                 $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+                // Fill components for legacy path
+                $components['fxMarginBps'] = $marginBps;
+                $components['percentBps'] = $percentBps;
+                $components['fixedFeeXaf'] = $fixedFee;
+                $components['percentFeeXaf'] = $percentFee;
+                $components['totalFeeXaf'] = $feeTotal;
             }
 
             $ttl = (int) AdminSetting::getValue('pricing.quote_ttl_secs', (int) env('QUOTE_TTL_SECONDS', 90));
@@ -372,6 +390,9 @@ class TransfersController extends Controller
                     'receiveNgnMinor' => $quote->receive_ngn_minor,
                     'adjustedRate' => $quote->adjusted_rate_xaf_to_ngn,
                     'expiresAt' => $quote->expires_at?->toISOString(),
+                    'ttlSeconds' => max(0, (int) now()->diffInSeconds($quote->expires_at, false)),
+                    'rateDisplay' => $quote->adjusted_rate_xaf_to_ngn ? sprintf("₦%s / XAF100", number_format($quote->adjusted_rate_xaf_to_ngn * 100, 2)) : null,
+                    'components' => $components,
                 ],
             ]);
         });

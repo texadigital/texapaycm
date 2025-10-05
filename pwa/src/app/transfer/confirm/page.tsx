@@ -44,6 +44,7 @@ function ConfirmInner() {
   const [bankName, setBankName] = React.useState("");
   const [accountNumber, setAccountNumber] = React.useState("");
   const [accountName, setAccountName] = React.useState("");
+  const [neRef, setNeRef] = React.useState<string | null>(null);
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [ttlSec, setTtlSec] = React.useState(0);
 
@@ -204,6 +205,11 @@ function ConfirmInner() {
           setBankName(s.recipient.bankName || "");
           setAccountNumber(s.recipient.account || "");
           setAccountName(s.recipient.accountName || "");
+          try {
+            const k = `ne:ref:${s.recipient.bankCode}:${s.recipient.account}`;
+            const ref = sessionStorage.getItem(k);
+            setNeRef(ref || null);
+          } catch {}
         }
         if (s?.quote) setQuote(s.quote);
         if (!s?.recipient || !s?.quote) {
