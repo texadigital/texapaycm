@@ -16,7 +16,10 @@ class JwtService
     public function __construct()
     {
         $this->algo = env('JWT_ALGO', 'HS256');
-        $this->secret = env('JWT_SECRET', base64_encode(random_bytes(32)));
+        // Use a stable secret across requests. If JWT_SECRET is not set, fall back to APP_KEY.
+        // Generating a random secret per request causes issued tokens to fail verification on the next request.
+        $envSecret = env('JWT_SECRET');
+        $this->secret = $envSecret ?: (string) config('app.key');
     }
 
     public function makeAccessToken(User $user, array $extra = [], int $ttlSeconds = 900): string

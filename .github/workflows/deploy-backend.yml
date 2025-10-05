@@ -18,6 +18,8 @@ jobs:
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       BACKEND_APP_DIR: ${{ secrets.BACKEND_APP_DIR }}
+      SITE_USER: ${{ secrets.BACKEND_SITE_USER }}
+      BACKEND_HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,7 +58,17 @@ jobs:
             echo "Using release: $REL"
 
             # Ensure shared structure and env
-            mkdir -p "$APP_DIR/shared" "$APP_DIR/shared/storage" "$APP_DIR/shared/bootstrap/cache"
+            mkdir -p "$APP_DIR/shared"
+            mkdir -p "$APP_DIR/shared/storage" \
+                     "$APP_DIR/shared/storage/app" \
+                     "$APP_DIR/shared/storage/framework" \
+                     "$APP_DIR/shared/storage/framework/cache" \
+                     "$APP_DIR/shared/storage/framework/data" \
+                     "$APP_DIR/shared/storage/framework/sessions" \
+                     "$APP_DIR/shared/storage/framework/testing" \
+                     "$APP_DIR/shared/storage/framework/views" \
+                     "$APP_DIR/shared/storage/logs"
+            mkdir -p "$APP_DIR/shared/bootstrap/cache"
             if [ ! -f "$APP_DIR/shared/.env" ]; then
               echo "Missing $APP_DIR/shared/.env"; exit 1; fi
 
@@ -65,18 +77,26 @@ jobs:
             rm -rf "$REL/storage" && ln -sfn "$APP_DIR/shared/storage" "$REL/storage"
             rm -rf "$REL/bootstrap/cache" && ln -sfn "$APP_DIR/shared/bootstrap/cache" "$REL/bootstrap/cache"
 
+            # Ensure release ownership (so horizon systemd user can read/execute)
+            chown -R "$SITE_USER:$SITE_USER" "$REL" || true
+
             cd "$REL"
             # Install PHP deps (no-dev) and optimize
             if command -v composer >/dev/null 2>&1; then COMPOSER_BIN=composer; else COMPOSER_BIN=/usr/local/bin/composer; fi
-            "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+            export COMPOSER_ALLOW_SUPERUSER=1
+            export COMPOSER_MEMORY_LIMIT=-1
+            "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-ansi --no-progress
 
             # Put app in maintenance for safe DB migrations (show 503 page)
             php artisan down --render="errors/503" || true
 
             php artisan storage:link || true
 
+            # Ensure we read fresh .env (avoid stale cached config)
+            php artisan config:clear || true
+
             # Run migrations
-            php artisan migrate --force || true
+            php artisan migrate --force
 
             # Restart workers to pick new code
             # Prefer Horizon if available; otherwise try Supervisor. These commands are idempotent.
@@ -101,9 +121,23 @@ jobs:
             # Ensure public points at current/public so no vhost edit is needed
             ln -sfn "$APP_DIR/current/public" "$APP_DIR/public"
 
+            # Ensure symlinks and app dir are owned by site user
+            chown -h "$SITE_USER:$SITE_USER" "$APP_DIR/current" "$APP_DIR/public" || true
+            chown -R "$SITE_USER:$SITE_USER" "$APP_DIR" || true
+
             # Reload PHP-FPM 8.4 and Nginx (adjust service name if different)
             systemctl reload php8.4-fpm || systemctl reload php8.3-fpm || true
             nginx -t && systemctl reload nginx || true
+
+            # Optional healthcheck
+            if [ -n "${BACKEND_HEALTHCHECK_URL}" ]; then
+              echo "Running healthcheck: ${BACKEND_HEALTHCHECK_URL}"
+              if ! curl -fsS --max-time 10 "${BACKEND_HEALTHCHECK_URL}" >/dev/null; then
+                echo "Healthcheck failed"
+                exit 1
+              fi
+            fi
+
             echo "Backend deploy complete: $REL_NAME"
 
             # Optional: keep only the 5 newest releases to save disk

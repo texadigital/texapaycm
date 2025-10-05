@@ -3,6 +3,7 @@ import React from "react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import http from "@/lib/api";
+import { setAccessToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 
 type LaravelValidationErrors = {
@@ -68,7 +69,12 @@ export default function RegisterPage() {
       }
       if (msg) setTopError(msg);
     },
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
+      try {
+        if (data && data.accessToken) {
+          setAccessToken(data.accessToken);
+        }
+      } catch {}
       try {
         const res = await http.get('/api/mobile/policies/status');
         const accepted = !!(res?.data?.accepted);
