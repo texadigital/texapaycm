@@ -31,6 +31,12 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
+      - name: Build PWA on runner
+        working-directory: pwa
+        run: |
+          npm ci --no-audit --no-fund
+          NODE_OPTIONS=--max_old_space_size=2048 npm run build
+
       - name: Rsync PWA source to server release directory
         run: |
           rsync -az --delete \
@@ -38,7 +44,10 @@ jobs:
             --exclude='node_modules' \
             pwa/ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/releases/${REL}/"
 
-      - name: Remote build, switch symlink, and reload PM2/Nginx
+          # Sync build output separately (ensures built assets are present remotely)
+          rsync -az pwa/.next/ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/releases/${REL}/.next/"
+
+      - name: Remote install runtime deps, switch symlink, and reload PM2/Nginx
         run: |
           ssh "${VPS_USER}@${VPS_HOST}" bash -lc '
             set -e
@@ -54,10 +63,9 @@ jobs:
             # Link env into release
             ln -sfn "$APP_DIR/shared/.env.production" "$REL/.env.production"
 
-            # Install WITH devDependencies (next.config.ts parsing)
+            # Install runtime deps only (build already done on runner)
             cd "$REL"
-            npm ci
-            npm run build
+            npm ci --omit=dev --no-audit --no-fund
 
             # Switch current symlink
             ln -sfn "$REL" "$APP_DIR/current"
