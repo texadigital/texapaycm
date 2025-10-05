@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Silence Next.js dev warning by explicitly allowing dev origins.
+  // Provide a comma-separated list in DEV_ALLOWED_ORIGINS, e.g. "http://192.168.43.98:3000,http://10.61.12.196:3000"
+  experimental: {
+    allowedDevOrigins: (process.env.DEV_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
   // SSR mode (default) – we deploy behind PM2/Nginx, so no static export
   images: { unoptimized: true },
   eslint: { ignoreDuringBuilds: true },
