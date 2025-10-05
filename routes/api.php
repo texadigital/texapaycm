@@ -208,3 +208,6 @@ Route::middleware([
         }); // end auth group
 
 }); // end outer mobile group
+Route::get('/health', function () {
+    return response()->json(['status' => 'ok'], 200);
+});
