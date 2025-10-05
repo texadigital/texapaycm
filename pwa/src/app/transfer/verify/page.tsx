@@ -302,10 +302,19 @@ function VerifyRecipientInner() {
                 ))}
               </div>
             )}
+            {suggestBusy && (
+              <div className="mt-2 h-6 bg-gray-100 rounded animate-pulse" />
+            )}
             {/* Inline verification status inside card */}
             <div role="status" aria-live="polite" className="mt-3">
               {nameEnquiry.isPending && (
-                <span className="inline-block text-xs px-2 py-1 rounded bg-gray-100 text-gray-800">Verifying…</span>
+                <span className="inline-flex items-center gap-2 text-xs px-2 py-1 rounded bg-gray-100 text-gray-800">
+                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  Verifying…
+                </span>
               )}
               {!nameEnquiry.isPending && ne?.accountName && (
                 <span className="inline-flex items-center gap-2 text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">

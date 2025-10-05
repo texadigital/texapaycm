@@ -396,7 +396,15 @@ function QuoteInner() {
               <div className="flex justify-between"><span>Total to pay</span><span className="font-medium">XAF {nf.format(quoteRes.quote.totalPayXaf)}</span></div>
               <div className="flex justify-between"><span>Effective rate</span><span>{`1 XAF = NGN ${(quoteRes.quote.adjustedRate ?? 0).toFixed(2)}`}</span></div>
             </div>
-          ) : null}
+          ) : (
+            (quote.isPending || (previewRate && amount)) ? (
+              <div className="rounded-md border p-3 text-xs text-gray-700 space-y-2">
+                <div className="h-3 bg-gray-100 rounded animate-pulse" />
+                <div className="h-3 bg-gray-100 rounded animate-pulse" />
+                <div className="h-3 bg-gray-100 rounded animate-pulse w-2/3" />
+              </div>
+            ) : null
+          )}
           <button
             className="w-full h-12 rounded-full bg-emerald-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors"
             disabled={quote.isPending || !amount || !quoteRes?.quote || ttlSec <= 0}
