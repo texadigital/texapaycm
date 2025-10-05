@@ -1,0 +1,111 @@
+name: Deploy Backend (Laravel) to api.pay.texa.ng
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '!pwa/**'
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: true
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      BACKEND_APP_DIR: ${{ secrets.BACKEND_APP_DIR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set release name
+        run: echo "REL=laravel-$(date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_ENV
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync Laravel source to server release directory
+        run: |
+          rsync -az --delete \
+            --exclude='pwa' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='storage/logs' \
+            ./ "${VPS_USER}@${VPS_HOST}:${BACKEND_APP_DIR}/releases/${REL}/"
+
+      - name: Remote build, link, and reload PHP-FPM/Nginx
+        run: |
+          ssh "${VPS_USER}@${VPS_HOST}" bash -lc '
+            set -e
+            APP_DIR='"${BACKEND_APP_DIR}"'
+            REL_NAME='"${REL}"'
+            REL="$APP_DIR/releases/$REL_NAME"
+            echo "Using release: $REL"
+
+            # Ensure shared structure and env
+            mkdir -p "$APP_DIR/shared" "$APP_DIR/shared/storage" "$APP_DIR/shared/bootstrap/cache"
+            if [ ! -f "$APP_DIR/shared/.env" ]; then
+              echo "Missing $APP_DIR/shared/.env"; exit 1; fi
+
+            # Link shared items into release
+            ln -sfn "$APP_DIR/shared/.env" "$REL/.env"
+            rm -rf "$REL/storage" && ln -sfn "$APP_DIR/shared/storage" "$REL/storage"
+            rm -rf "$REL/bootstrap/cache" && ln -sfn "$APP_DIR/shared/bootstrap/cache" "$REL/bootstrap/cache"
+
+            cd "$REL"
+            # Install PHP deps (no-dev) and optimize
+            if command -v composer >/dev/null 2>&1; then COMPOSER_BIN=composer; else COMPOSER_BIN=/usr/local/bin/composer; fi
+            "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+            # Put app in maintenance for safe DB migrations (show 503 page)
+            php artisan down --render="errors/503" || true
+
+            php artisan storage:link || true
+
+            # Run migrations
+            php artisan migrate --force || true
+
+            # Restart workers to pick new code
+            # Prefer Horizon if available; otherwise try Supervisor. These commands are idempotent.
+            if php artisan list --raw | grep -q '^horizon:'; then
+              php artisan horizon:terminate || true
+            else
+              # Try to reload supervisor or specific program if present
+              systemctl reload supervisor || true
+              supervisorctl restart laravel-worker:* || true
+            fi
+
+            # Rebuild caches after code changes
+            php artisan config:cache || true
+            php artisan route:cache || true
+            php artisan view:cache || true
+
+            # Bring app back up
+            php artisan up || true
+
+            # Atomic switch: update current symlink
+            ln -sfn "$REL" "$APP_DIR/current"
+            # Ensure public points at current/public so no vhost edit is needed
+            ln -sfn "$APP_DIR/current/public" "$APP_DIR/public"
+
+            # Reload PHP-FPM 8.4 and Nginx (adjust service name if different)
+            systemctl reload php8.4-fpm || systemctl reload php8.3-fpm || true
+            nginx -t && systemctl reload nginx || true
+            echo "Backend deploy complete: $REL_NAME"
+
+            # Optional: keep only the 5 newest releases to save disk
+            cd "$APP_DIR/releases" && ls -1t | tail -n +6 | xargs -r -I {} rm -rf {}
+          '
