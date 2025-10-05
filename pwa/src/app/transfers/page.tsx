@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import RequireAuth from "@/components/guards/require-auth";
 import Link from "next/link";
 import http from "@/lib/api";
@@ -30,23 +30,60 @@ type FeedMonth = {
 type FeedRes = { months: FeedMonth[]; meta?: { page?: number; perPage?: number; lastPage?: number } } & Record<string, any>;
 
 export default function TransfersListPage() {
-  const [page, setPage] = React.useState(1);
   const perPage = 20;
+  const [filter, setFilter] = React.useState<'all'|'Successful'|'Pending'|'Failed'>("all");
 
-  const q = useQuery<FeedRes>({
-    queryKey: ["transactions-feed", page],
-    queryFn: async () => {
-      const res = await http.get("/api/mobile/transactions/feed", { params: { page, perPage } });
+  const q = useInfiniteQuery<{ months: FeedMonth[]; meta?: { page?: number; lastPage?: number } }>({
+    queryKey: ["transactions-feed", perPage],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await http.get("/api/mobile/transactions/feed", { params: { page: pageParam, perPage } });
       return res.data as any;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (last) => {
+      const lastPage = last?.meta?.lastPage || 1;
+      const current = last?.meta?.page || 1;
+      return current < lastPage ? current + 1 : undefined;
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    placeholderData: (prev) => prev as any,
   });
 
-  const months: FeedMonth[] = Array.isArray((q.data as any)?.months) ? ((q.data as any).months as FeedMonth[]) : [];
-  const meta: { lastPage?: number } = (q.data?.meta as any) || {};
+  const flatMonths: FeedMonth[] = React.useMemo(() => {
+    const pages = q.data?.pages || [];
+    const combined: Record<string, FeedMonth> = {};
+    for (const p of pages) {
+      for (const m of (p.months || [])) {
+        if (!combined[m.key]) combined[m.key] = { ...m, items: [...m.items] };
+        else combined[m.key].items.push(...m.items);
+      }
+    }
+    let arr = Object.values(combined).sort((a,b)=> a.key < b.key ? 1 : -1);
+    if (filter !== 'all') {
+      arr = arr.map(m => ({
+        ...m,
+        items: m.items.filter(it => it.kind === 'transfer' && it.statusLabel === filter)
+      }));
+    }
+    return arr;
+  }, [q.data, filter]);
+
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const io = new IntersectionObserver((entries) => {
+      const [e] = entries;
+      if (e.isIntersecting && q.hasNextPage && !q.isFetchingNextPage) {
+        q.fetchNextPage();
+      }
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => { io.disconnect(); };
+  }, [q.hasNextPage, q.isFetchingNextPage]);
 
   const formatMoney = (minor: number, currency: string) => {
     // NGN minor to major; XAF is not minor in backend fees mapping (we sent minor = xaf*100)
@@ -67,11 +104,19 @@ export default function TransfersListPage() {
             <CardSkeleton lines={3} />
             <CardSkeleton lines={3} />
           </div>
-        ) : months.length === 0 ? (
+        ) : flatMonths.length === 0 ? (
           <div className="text-sm text-gray-600 border rounded p-3">No transfers yet.</div>
         ) : (
           <div className="space-y-4">
-            {months.map((m) => (
+            {/* Filters */}
+            <div className="flex items-center gap-2 text-xs">
+              {(["all","Successful","Pending","Failed"] as const).map(f => (
+                <button key={f} onClick={()=>setFilter(f)} className={`px-2 py-1 rounded border ${filter===f? 'bg-black text-white':'bg-white text-black'}`}>{f}</button>
+              ))}
+              <button onClick={()=>q.refetch()} className="ml-auto underline">Refresh</button>
+            </div>
+
+            {flatMonths.map((m) => (
               <div key={m.key} className="border rounded">
                 <div className="flex items-center justify-between p-3">
                   <div className="font-semibold">{m.label}</div>
@@ -106,14 +151,18 @@ export default function TransfersListPage() {
                 </div>
               </div>
             ))}
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} />
+            {q.isFetchingNextPage && (
+              <div className="text-xs text-gray-600 text-center">Loading more…</div>
+            )}
           </div>
         )}
-
-        <div className="flex items-center justify-between pt-2">
-          <button className="border rounded px-3 py-1 disabled:opacity-50" disabled={page <= 1 || q.isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
-          <div className="text-xs text-gray-600">Page {page}{meta?.lastPage ? ` / ${meta.lastPage}` : ""}</div>
-          <button className="border rounded px-3 py-1 disabled:opacity-50" disabled={!!meta?.lastPage && page >= meta.lastPage || q.isFetching} onClick={() => setPage((p) => p + 1)}>Next</button>
-        </div>
+        {q.isError && (
+          <div className="text-sm text-red-600 border border-red-200 rounded p-2 mt-2">
+            Failed to load transfers. <button className="underline" onClick={()=>q.refetch()}>Try again</button>
+          </div>
+        )}
       </div>
     </RequireAuth>
   );

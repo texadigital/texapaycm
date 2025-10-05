@@ -8,7 +8,7 @@ import http from "@/lib/api";
 import RequireAuth from "@/components/guards/require-auth";
 import { validateCameroon, providerMeta, formatForDisplay } from "@/lib/phone";
 
-type ConfirmReq = { quoteId: number; bankCode: string; accountNumber: string; msisdn: string };
+type ConfirmReq = { quoteId: number; bankCode: string; accountNumber: string; msisdn: string; accountName?: string; nameEnquiryRef?: string };
 
 type ConfirmRes = {
   success: boolean;
@@ -300,7 +300,9 @@ function ConfirmInner() {
               setTopError(v.error || "Invalid phone number");
               return;
             }
-            const vars = { quoteId: Number(quoteId), bankCode, accountNumber, msisdn: v.normalized };
+            const vars: ConfirmReq = { quoteId: Number(quoteId), bankCode, accountNumber, msisdn: v.normalized };
+            if (accountName) vars.accountName = accountName;
+            if (neRef) vars.nameEnquiryRef = neRef;
             lastConfirmVarsRef.current = vars;
             if (Date.now() < cooldownUntil) {
               setTopError('Please wait a few seconds before trying again.');

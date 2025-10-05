@@ -413,6 +413,9 @@ class TransfersController extends Controller
             'bankCode' => ['required','string','max:32'],
             'accountNumber' => ['required','string','max:32'],
             'msisdn' => ['required','string','min:8','max:20'],
+            // Optional hints from client to avoid UNKNOWN name when NE succeeded earlier
+            'nameEnquiryRef' => ['nullable','string','max:80'],
+            'accountName' => ['nullable','string','max:190'],
         ]);
 
         return $this->idempotent($request, function () use ($data, $pawa) {
@@ -483,15 +486,18 @@ class TransfersController extends Controller
                 $resolvedBankName = 'SAFE HAVEN SANDBOX BANK';
             }
 
-            // Attempt server-side name enquiry to derive account name and reference; fallback to UNKNOWN/null
-            $resolvedAccountName = null;
-            $resolvedNameRef = null;
+            // Prefer client-provided NE reference and account name when available (from a prior successful NE)
+            $resolvedAccountName = $data['accountName'] ?? null;
+            $resolvedNameRef = $data['nameEnquiryRef'] ?? null;
+            // Attempt server-side name enquiry to derive account name and reference if not provided
             try {
-                $ne = $safeHaven->nameEnquiry($data['bankCode'], $data['accountNumber']);
-                $okNe = (bool) ($ne['success'] ?? false) || (($ne['statusCode'] ?? null) === 200);
-                if ($okNe) {
-                    $resolvedAccountName = $ne['account_name'] ?? ($ne['data']['accountName'] ?? null);
-                    $resolvedNameRef = $ne['reference'] ?? ($ne['data']['sessionId'] ?? null);
+                if (!$resolvedNameRef || !$resolvedAccountName) {
+                    $ne = $safeHaven->nameEnquiry($data['bankCode'], $data['accountNumber']);
+                    $okNe = (bool) ($ne['success'] ?? false) || (($ne['statusCode'] ?? null) === 200);
+                    if ($okNe) {
+                        $resolvedAccountName = $resolvedAccountName ?: ($ne['account_name'] ?? ($ne['data']['accountName'] ?? null));
+                        $resolvedNameRef = $resolvedNameRef ?: ($ne['reference'] ?? ($ne['data']['sessionId'] ?? null));
+                    }
                 }
             } catch (\Throwable $e) {
                 // ignore and fallback below
@@ -508,6 +514,7 @@ class TransfersController extends Controller
                     'recipient_bank_code' => $data['bankCode'],
                     'recipient_bank_name' => $resolvedBankName ?: 'UNKNOWN',
                     'recipient_account_number' => $data['accountNumber'],
+                    // Use provided or resolved account name; fallback to UNKNOWN only if still empty
                     'recipient_account_name' => ($resolvedAccountName && trim($resolvedAccountName) !== '') ? $resolvedAccountName : 'UNKNOWN',
                     // Persist name enquiry ref when available to avoid JIT lookup at payout time
                     'name_enquiry_reference' => $resolvedNameRef,
