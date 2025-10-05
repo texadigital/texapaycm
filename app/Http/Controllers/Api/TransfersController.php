@@ -391,7 +391,7 @@ class TransfersController extends Controller
                     'adjustedRate' => $quote->adjusted_rate_xaf_to_ngn,
                     'expiresAt' => $quote->expires_at?->toISOString(),
                     'ttlSeconds' => max(0, (int) now()->diffInSeconds($quote->expires_at, false)),
-                    'rateDisplay' => $quote->adjusted_rate_xaf_to_ngn ? sprintf("₦%s / XAF100", number_format($quote->adjusted_rate_xaf_to_ngn * 100, 2)) : null,
+                    'rateDisplay' => $quote->adjusted_rate_xaf_to_ngn ? sprintf("1 XAF = NGN %s", number_format($quote->adjusted_rate_xaf_to_ngn, 2)) : null,
                     'components' => $components,
                 ],
             ]);

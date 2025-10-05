@@ -259,6 +259,9 @@ function ConfirmInner() {
             <div className="text-sm font-medium truncate">{accountName || "Recipient"}</div>
             <div className="text-xs text-blue-600 truncate">{accountNumber}</div>
             <div className="text-xs text-gray-600 truncate">{bankName}</div>
+            {neRef ? (
+              <div className="text-[11px] text-gray-500 truncate mt-0.5">Verified ref: {neRef}</div>
+            ) : null}
           </div>
         </section>
 

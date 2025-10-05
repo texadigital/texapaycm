@@ -38,7 +38,7 @@ export default function TopBar() {
 
   return (
     <header className="px-4 py-2 border-b flex items-center justify-between">
-      <a href="/" className="font-medium">TEXA</a>
+      <a href={hasToken ? "/dashboard" : "/auth/login"} className="font-medium">TEXA</a>
       {!onAuthPage && hasToken ? (
         <div className="flex items-center gap-4">
           <a href="/notifications" className="relative text-sm underline">

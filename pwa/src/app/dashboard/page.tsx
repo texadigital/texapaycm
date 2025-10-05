@@ -6,6 +6,7 @@ import http from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import RequireAuth from "@/components/guards/require-auth";
 import { CardSkeleton } from "@/components/ui/skeleton";
+ 
 
 type DashboardResponse = {
   kyc: { status: string; level: number };
@@ -47,6 +48,34 @@ export default function DashboardPage() {
     if (typeof window === 'undefined') return 'all';
     return (window.localStorage.getItem('dash:totalSentPeriod') as any) || 'all';
   });
+
+  // FX preview for dashboard: derive cross (NGN per XAF)
+  const fxQ = useQuery<{ usd_to_xaf: number; usd_to_ngn: number; fetched_at?: string; raw?: any } | null>({
+    queryKey: ["dashboard-fx"],
+    queryFn: async () => {
+      const res = await http.get('/api/mobile/pricing/rate-preview');
+      const d = res.data || {};
+      const usd_to_xaf = Number(d.usd_to_xaf || d.usdToXaf || 0);
+      const usd_to_ngn = Number(d.usd_to_ngn || d.usdToNgn || 0);
+      if (!usd_to_xaf || !usd_to_ngn) return null;
+      return { usd_to_xaf, usd_to_ngn, fetched_at: d.fetched_at || d.fetchedAt, raw: d } as any;
+    },
+    enabled,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    placeholderData: (prev) => prev as any,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  const crossRate = React.useMemo(() => {
+    const d = fxQ.data;
+    if (!d) return null;
+    return d.usd_to_ngn / d.usd_to_xaf; // NGN per XAF
+  }, [fxQ.data]);
+  const fxUpdatedAt = React.useMemo(() => {
+    if (fxQ.isLoading) return null;
+    return new Date().toLocaleTimeString();
+  }, [fxQ.data, fxQ.isFetching]);
 
   // Turn on query when a token becomes available
   React.useEffect(() => {
@@ -179,6 +208,29 @@ export default function DashboardPage() {
                 <button key={p} className={`px-2 py-1 rounded border ${period===p?'bg-black text-white':'bg-white text-black'}`} onClick={() => { setPeriod(p); window.localStorage.setItem('dash:totalSentPeriod', p); }}>{p==='all'?'All-time':p==='month'?'This month':'This week'}</button>
               ))}
             </div>
+          </section>
+
+          {/* B.1) Current Rate widget */}
+          <section className="border rounded p-4" aria-live="polite">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs text-gray-600">Current Rate</div>
+              <button
+                onClick={() => fxQ.refetch()}
+                className="text-xs underline"
+                disabled={fxQ.isFetching}
+                aria-label="Refresh rate"
+              >{fxQ.isFetching ? 'Refreshing…' : 'Refresh'}</button>
+            </div>
+            {fxQ.isLoading && <div className="text-sm text-gray-600">Loading rate…</div>}
+            {!fxQ.isLoading && crossRate && (
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl font-semibold">1 XAF = NGN {crossRate.toFixed(2)}</div>
+                <div className="text-xs text-gray-500">as of {fxUpdatedAt}</div>
+              </div>
+            )}
+            {!fxQ.isLoading && !crossRate && (
+              <div className="text-sm text-gray-600">Rate unavailable. <button className="underline" onClick={() => fxQ.refetch()}>Try again</button></div>
+            )}
           </section>
 
           {/* C) Primary CTA */}

@@ -59,10 +59,15 @@ class PricingController extends Controller
 
     public function preview(Request $request, OpenExchangeRates $oxr)
     {
-        $data = $request->validate([
-            'amountXaf' => ['required','numeric','min:1'],
-        ]);
-        $amountXaf = (int) round($data['amountXaf']);
+        // Support lightweight GET without amount for simple rate preview on dashboard
+        $hasAmount = $request->has('amountXaf');
+        $amountXaf = null;
+        if ($hasAmount) {
+            $data = $request->validate([
+                'amountXaf' => ['required','numeric','min:1'],
+            ]);
+            $amountXaf = (int) round($data['amountXaf']);
+        }
 
         $fx = $oxr->fetchUsdRates();
         if (!($fx['usd_to_xaf'] ?? null) || !($fx['usd_to_ngn'] ?? null)) {
@@ -78,7 +83,7 @@ class PricingController extends Controller
         $usdToNgn = (float) $fx['usd_to_ngn'];
         $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
 
-        if ($pricingV2) {
+        if ($hasAmount && $pricingV2) {
             $engine = app(PricingEngine::class);
             $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
                 'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
@@ -87,7 +92,7 @@ class PricingController extends Controller
             $feeTotal = (int) $calc['fee_amount_xaf'];
             $totalPayXaf = (int) $calc['total_pay_xaf'];
             $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
-        } else {
+        } elseif ($hasAmount) {
             $cross = $usdToNgn / $usdToXaf;
             $marginBps = (int) (env('FX_MARGIN_BPS', 0));
             $adjustedRate = $cross * (1 - ($marginBps / 10000));
@@ -99,6 +104,15 @@ class PricingController extends Controller
             $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
             $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
             $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
+        }
+
+        // If no amount provided, return simple rate preview only
+        if (!$hasAmount) {
+            return response()->json([
+                'usd_to_xaf' => $usdToXaf,
+                'usd_to_ngn' => $usdToNgn,
+                'fetched_at' => $fx['fetched_at'] ?? null,
+            ]);
         }
 
         return response()->json([

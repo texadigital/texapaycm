@@ -131,6 +131,18 @@ function VerifyRecipientInner() {
     return () => { cancelled = true; };
   }, [account]);
 
+  // If account is completely empty, clear selected bank and verification state
+  React.useEffect(() => {
+    if (account.trim().length === 0) {
+      if (bankCode || bankName || ne || verifiedKey) {
+        setBankCode("");
+        setBankName("");
+        setNe(null);
+        setVerifiedKey("");
+      }
+    }
+  }, [account]);
+
   // Auto name-enquiry when bank selected and account length looks valid (>=10)
   React.useEffect(() => {
     const acct = account.trim();
@@ -279,7 +291,7 @@ function VerifyRecipientInner() {
                 <span className="h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center text-xs">
                   {(bankName || '•').slice(0,1).toUpperCase()}
                 </span>
-                <span className="text-sm">{bankName || 'Select Bank'}</span>
+                <span className="text-sm">{account.trim().length === 0 ? 'Select Bank' : (bankName || 'Select Bank')}</span>
               </span>
               <span aria-hidden className="text-gray-400">›</span>
             </button>
