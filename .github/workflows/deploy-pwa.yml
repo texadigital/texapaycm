@@ -31,12 +31,6 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
-      - name: Build PWA on runner
-        working-directory: pwa
-        run: |
-          npm ci --no-audit --no-fund
-          NODE_OPTIONS=--max_old_space_size=2048 npm run build
-
       - name: Rsync PWA source to server release directory
         run: |
           rsync -az --delete \
@@ -44,13 +38,10 @@ jobs:
             --exclude='node_modules' \
             pwa/ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/releases/${REL}/"
 
-          # Sync build output separately (ensures built assets are present remotely)
-          rsync -az pwa/.next/ "${VPS_USER}@${VPS_HOST}:${VPS_APP_DIR}/releases/${REL}/.next/"
-
-      - name: Remote install runtime deps, switch symlink, and reload PM2/Nginx
+      - name: Remote build, switch symlink, and reload PM2/Nginx
         run: |
-          ssh "${VPS_USER}@${VPS_HOST}" bash -lc '
-            set -e
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "${VPS_USER}@${VPS_HOST}" bash -lc '
+            set -euo pipefail
             APP_DIR='"${VPS_APP_DIR}"'
             REL_NAME='"${REL}"'
             REL="$APP_DIR/releases/$REL_NAME"
@@ -63,9 +54,24 @@ jobs:
             # Link env into release
             ln -sfn "$APP_DIR/shared/.env.production" "$REL/.env.production"
 
-            # Install runtime deps only (build already done on runner)
+            # Ensure Node 18+/20+ and PM2 are available
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Node.js is not installed. Please install Node 18+ and PM2, then re-run."; exit 1
+            fi
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2 || { echo "Failed to install PM2"; exit 1; }
+            fi
+
+            export NODE_ENV=production
+            export CI=true
+            # Cap memory to avoid OOM on small VPS
+            export NODE_OPTIONS="--max_old_space_size=512"
+
             cd "$REL"
-            npm ci --omit=dev --no-audit --no-fund
+            # Install deps (dev deps included for Next build)
+            npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund
+            # Build Next app
+            NEXT_TELEMETRY_DISABLED=1 npm run build
 
             # Switch current symlink
             ln -sfn "$REL" "$APP_DIR/current"
@@ -76,7 +82,7 @@ jobs:
             else
               NODE_ENV=production pm2 start npm --name texa-pwa -- run start -- -p 3005
             fi
-            pm2 save
+            pm2 save || true
 
             # Reload Nginx
             nginx -t && systemctl reload nginx || true
