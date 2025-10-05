@@ -27,15 +27,17 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Normalize phone first so validation runs against the canonical value
+        $rawPhone = (string) $request->input('phone', '');
+        $phone = PhoneNumberService::normalize($rawPhone);
+        $request->merge(['phone' => $phone]);
+
         $data = $request->validate([
             'name' => ['required','string','max:190'],
             'phone' => ['required','string','max:32','unique:users,phone'],
             'password' => ['required','string','min:6','max:190'],
             'pin' => ['required','string','regex:/^\d{4,6}$/'],
         ]);
-
-        // Normalize phone number to international format
-        $phone = PhoneNumberService::normalize($data['phone']);
         
         // Validate Cameroon phone number
         $validation = PhoneNumberService::validateCameroon($phone);
@@ -49,6 +51,15 @@ class AuthController extends Controller
         
         $email = $phone . '@local';
 
+        // Gracefully handle duplicates to avoid DB unique errors
+        if (User::where('phone', $phone)->orWhere('email', $email)->exists()) {
+            return response()->json([
+                'success' => false,
+                'code' => 'PHONE_TAKEN',
+                'message' => 'This phone is already registered.',
+            ], 422);
+        }
+
         $user = User::create([
             'name' => $data['name'],
             'phone' => $phone,
@@ -57,19 +68,67 @@ class AuthController extends Controller
             'pin_hash' => Hash::make($data['pin']),
         ]);
 
+        // Log in the new user (session-based, harmless for mobile) and also issue mobile JWT + refresh cookie
         Auth::login($user, true);
         $request->session()->regenerate();
 
-        return response()->json([
-            'success' => true,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'phone' => $user->phone,
-                'kycStatus' => (string) ($user->kyc_status ?? 'unverified'),
-                'kycLevel' => (int) ($user->kyc_level ?? 0),
-            ],
-        ], 201);
+        // Issue access token via JwtService and set a refresh cookie compatible with TokenAuthController
+        try {
+            /** @var \App\Services\JwtService $jwt */
+            $jwt = app(\App\Services\JwtService::class);
+            $access = $jwt->makeAccessToken($user, []);
+
+            // Create a refresh token record and queue cookie
+            $raw = \Illuminate\Support\Str::random(64);
+            $hash = hash('sha256', $raw);
+            $rec = \App\Models\RefreshToken::create([
+                'user_id' => $user->id,
+                'token_hash' => $hash,
+                'device_name' => (string) $request->header('X-Device-Name', ''),
+                'ip' => (string) $request->ip(),
+                'user_agent' => (string) $request->userAgent(),
+                'expires_at' => now()->addDays(60),
+            ]);
+
+            // Cookie attributes aligned with TokenAuthController::setRefreshCookie
+            $secure = app()->environment('production') && $request->isSecure();
+            $sameSite = 'lax';
+            $cookie = cookie(
+                name: 'refresh_token',
+                value: $raw,
+                minutes: 60 * 24 * 60, // 60 days
+                path: '/',
+                domain: null,
+                secure: $secure,
+                httpOnly: true,
+                sameSite: $sameSite
+            );
+            cookie()->queue($cookie);
+
+            return response()->json([
+                'success' => true,
+                'accessToken' => $access,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'kycStatus' => (string) ($user->kyc_status ?? 'unverified'),
+                    'kycLevel' => (int) ($user->kyc_level ?? 0),
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            // Fallback: still return success without tokens if JWT flow fails
+            return response()->json([
+                'success' => true,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'kycStatus' => (string) ($user->kyc_status ?? 'unverified'),
+                    'kycLevel' => (int) ($user->kyc_level ?? 0),
+                ],
+            ], 201);
+        }
     }
     /**
      * POST /api/mobile/auth/login
