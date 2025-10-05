@@ -2,12 +2,12 @@ import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'ax
 import { getAccessToken, setAccessToken, refreshAccessToken } from './auth';
 
 // Base URL strategy:
-// - In local browser dev (localhost), use relative base ('') so requests go to /api and
-//   get proxied by Next.js rewrites() to the backend. This avoids CORS.
-// - Otherwise (production or non-local), use NEXT_PUBLIC_API_BASE_URL.
+// - In DEVELOPMENT (browser), ALWAYS use relative base ('') so requests go to /api and
+//   get proxied by Next.js rewrites() to the Laravel backend. This avoids CORS/LAN issues.
+// - In PRODUCTION (or during SSR/build), use NEXT_PUBLIC_API_BASE_URL.
 const isBrowser = typeof window !== 'undefined';
-const onLocalhost = isBrowser && /^(localhost|127\.0\.0\.1):\d+$/i.test(window.location.host);
-const BASE_URL = onLocalhost ? '' : (process.env.NEXT_PUBLIC_API_BASE_URL || '');
+const isDev = process.env.NODE_ENV === 'development';
+const BASE_URL = (isBrowser && isDev) ? '' : (process.env.NEXT_PUBLIC_API_BASE_URL || '');
 
 export const http: AxiosInstance = axios.create({
   // If BASE_URL is empty, axios will use same-origin relative URLs
