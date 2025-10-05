@@ -34,6 +34,11 @@ export default function ReceiptPage() {
       return res.data as any;
     },
     enabled: !!id,
+    placeholderData: (prev) => prev as any,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     refetchInterval: (data) => {
       const s = (data as any)?.status || '';
       const terminal = s.includes('success') || s.includes('failed') || s.includes('completed') || s.includes('error');

@@ -59,6 +59,11 @@ export default function TransferTimelinePage() {
       return res.data;
     },
     enabled: !!id,
+    placeholderData: (prev) => prev as any,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const details = useQuery<TransferDetails>({
@@ -68,6 +73,11 @@ export default function TransferTimelinePage() {
       return res.data as any;
     },
     enabled: !!id,
+    placeholderData: (prev) => prev as any,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   type StatusRes = { status?: string; success?: boolean };

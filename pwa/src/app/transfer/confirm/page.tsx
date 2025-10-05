@@ -55,6 +55,7 @@ function ConfirmInner() {
   const [payoutStatus, setPayoutStatus] = React.useState<string | null>(null);
   const [autoPayoutStarted, setAutoPayoutStarted] = React.useState(false);
   const [cooldownUntil, setCooldownUntil] = React.useState(0);
+  const [cooldownLeft, setCooldownLeft] = React.useState(0);
   const lastConfirmVarsRef = React.useRef<ConfirmReq | null>(null);
   const retried429Ref = React.useRef(false);
 
@@ -96,9 +97,11 @@ function ConfirmInner() {
       const status = e?.response?.status;
       if (status === 429 && !retried429Ref.current) {
         // Cooldown and retry once
-        const until = Date.now() + 12000;
+        const raHdr = Number(e?.response?.headers?.['retry-after']) || Number(e?.response?.data?.retryAfterSeconds);
+        const ra = Math.max(5, Math.min(120, raHdr || 12));
+        const until = Date.now() + ra * 1000;
         setCooldownUntil(until);
-        setTopError("Please wait a few seconds before trying again.");
+        setTopError(`Please wait ${ra}s before trying again.`);
         retried429Ref.current = true;
         setTimeout(() => {
           if (Date.now() >= until && lastConfirmVarsRef.current) {
@@ -232,6 +235,15 @@ function ConfirmInner() {
     return () => clearInterval(id);
   }, [quote?.expiresAt]);
 
+  // Cooldown countdown tick
+  React.useEffect(() => {
+    if (cooldownUntil <= Date.now()) { setCooldownLeft(0); return; }
+    const tick = () => setCooldownLeft(Math.max(0, Math.ceil((cooldownUntil - Date.now())/1000)));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
+
   // No auto refresh; user triggers re-quote manually.
 
   const receiveNgn = quote ? (quote.receiveNgnMinor / 100) : 0;
@@ -249,7 +261,7 @@ function ConfirmInner() {
           <button className="text-sm underline" onClick={() => router.push('/transfers')}>History</button>
         </div>
         {topError ? (
-          <div className="text-sm text-red-600 border border-red-200 rounded p-2">{topError}</div>
+          <div className="text-sm text-red-600 border border-red-200 rounded p-2">{topError}{cooldownLeft>0?` (${cooldownLeft}s)`:''}</div>
         ) : null}
 
         {/* Recipient summary */}
@@ -305,7 +317,8 @@ function ConfirmInner() {
             if (neRef) vars.nameEnquiryRef = neRef;
             lastConfirmVarsRef.current = vars;
             if (Date.now() < cooldownUntil) {
-              setTopError('Please wait a few seconds before trying again.');
+              const left = Math.max(0, Math.ceil((cooldownUntil - Date.now())/1000));
+              setTopError(`Please wait ${left}s before trying again.`);
               return;
             }
             retried429Ref.current = false; // reset per attempt
@@ -337,7 +350,7 @@ function ConfirmInner() {
           <button
             type="submit"
             className="w-full h-12 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={confirm.isPending || !!transferId}
+            disabled={confirm.isPending || !!transferId || cooldownLeft>0}
             style={{
               backgroundColor:
                 payinStatus?.includes('pending') ? '#6b7280' :
