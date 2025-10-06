@@ -62,14 +62,24 @@ jobs:
               npm install -g pm2 || { echo "Failed to install PM2"; exit 1; }
             fi
 
-            export NODE_ENV=production
             export CI=true
             # Cap memory to avoid OOM on small VPS
             export NODE_OPTIONS="--max_old_space_size=512"
+            # Ensure npm installs devDependencies regardless of server env
+            npm config set production false --location=project || true
 
             cd "$REL"
-            # Install deps (dev deps included for Next build)
-            npm ci --no-audit --no-fund --prefer-offline || npm install --no-audit --no-fund
+            # Install deps WITH devDependencies (required to transpile next.config.ts)
+            # Do NOT set NODE_ENV=production before this step, or npm will skip dev deps
+            NPM_CONFIG_PRODUCTION=false npm ci --no-audit --no-fund --prefer-offline \
+              || NPM_CONFIG_PRODUCTION=false npm install --no-audit --no-fund
+            # Guard: ensure TypeScript is present for next.config.ts
+            if ! node -e "require.resolve('typescript')" >/dev/null 2>&1; then
+              echo "TypeScript not found after install; installing dev types"
+              npm install -D typescript @types/node @types/react @types/react-dom --no-audit --no-fund
+            fi
+            # Diagnostics before build
+            node -v; npm -v; npm ls typescript || true
             # Build Next app
             NEXT_TELEMETRY_DISABLED=1 npm run build
 

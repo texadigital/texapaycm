@@ -16,8 +16,8 @@ export default function ResetPasswordPage() {
 function ResetPasswordInner() {
   const sp = useSearchParams();
   const router = useRouter();
-  const initialPhone = React.useMemo(() => sp.get("phone") || "", [sp]);
-  const [phone, setPhone] = React.useState(initialPhone);
+  const initialIdentifier = React.useMemo(() => sp.get("identifier") || sp.get("phone") || "", [sp]);
+  const [identifier, setIdentifier] = React.useState(initialIdentifier);
   const [code, setCode] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
@@ -36,16 +36,16 @@ function ResetPasswordInner() {
     mutationFn: async () => {
       setMessage(null);
       setError(null);
-      if (!phone || code.length !== 6) throw new Error("Enter the 6-digit code sent to your phone.");
+      if (!identifier || code.length !== 6) throw new Error("Enter the 6-digit code sent to your phone.");
       if (!password || password.length < 6) throw new Error("Enter a new password (min 6 characters).");
       if (password !== confirm) throw new Error("Passwords do not match.");
-      const res = await http.post("/api/mobile/auth/reset-password", { phone, code, password });
+      const res = await http.post("/api/mobile/auth/password/reset", { identifier, code, new_password: password });
       return res.data as any;
     },
     onSuccess: (d: any) => {
       setMessage(d?.message || "Password reset successful. You can now sign in.");
       // Redirect to login after a short pause
-      setTimeout(() => router.replace(`/auth/login?reset=1&phone=${encodeURIComponent(phone)}`), 1200);
+      setTimeout(() => router.replace(`/auth/login?reset=1`), 1200);
     },
     onError: (e: any) => setError(e?.response?.data?.message || e.message || "Failed"),
   });
@@ -53,11 +53,19 @@ function ResetPasswordInner() {
   const resend = useMutation({
     mutationFn: async () => {
       setError(null);
-      const res = await http.post("/api/mobile/auth/forgot-password", { phone });
+      const res = await http.post("/api/mobile/auth/password/forgot", { identifier });
       return res.data as any;
     },
     onSuccess: () => setResendIn(60),
-    onError: (e: any) => setError(e?.response?.data?.message || e.message || "Failed to resend code"),
+    onError: (e: any) => {
+      const ra = Number(e?.response?.headers?.['retry-after']) || Number(e?.response?.data?.retryAfterSeconds);
+      if (e?.response?.status === 429 && ra) {
+        setResendIn(Math.min(120, Math.max(5, ra)));
+        setError(`Please wait ${Math.min(120, Math.max(5, ra))}s before trying again.`);
+      } else {
+        setError(e?.response?.data?.message || e.message || "Failed to resend code");
+      }
+    },
   });
 
   return (
@@ -81,8 +89,8 @@ function ResetPasswordInner() {
             <label className="block text-sm mb-1">Phone</label>
             <input
               className="w-full border rounded px-3 py-2"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               placeholder="+2376..."
               required
             />

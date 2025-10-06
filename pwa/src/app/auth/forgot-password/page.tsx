@@ -18,12 +18,12 @@ export default function ForgotPasswordPage() {
       setError(null);
       const v = validateCameroon(phone);
       if (!v.valid) throw new Error(v.error || "Invalid phone number");
-      const res = await http.post("/api/mobile/auth/forgot-password", { phone: v.normalized });
+      const res = await http.post("/api/mobile/auth/password/forgot", { identifier: v.normalized });
       return res.data as any;
     },
     onSuccess: (d: any) => {
       const v = validateCameroon(phone);
-      const qp = new URLSearchParams({ phone: v.normalized });
+      const qp = new URLSearchParams({ identifier: v.normalized });
       router.replace(`/auth/reset-password?${qp.toString()}`);
     },
     onError: (e: any) => setError(e?.response?.data?.message || e.message || "Failed"),
@@ -43,6 +43,7 @@ export default function ForgotPasswordPage() {
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+            send.mutate();
           }}
         >
           <div>

@@ -95,6 +95,12 @@ jobs:
             # Ensure we read fresh .env (avoid stale cached config)
             php artisan config:clear || true
 
+            # Ensure sessions migration exists (idempotent)
+            if ! ls database/migrations/*create_sessions_table*.php >/dev/null 2>&1; then
+              echo "Generating sessions table migration"
+              php artisan session:table || true
+            fi
+
             # Run migrations
             php artisan migrate --force
 
@@ -129,6 +135,17 @@ jobs:
             systemctl reload php8.4-fpm || systemctl reload php8.3-fpm || true
             nginx -t && systemctl reload nginx || true
 
+            # Sanity checks for SMTP and Twilio (warn-only)
+            echo "--- Sanity: SMTP/Twilio envs ---"
+            if [ -f "$APP_DIR/shared/.env" ]; then
+              if ! grep -qE '^MAIL_HOST=' "$APP_DIR/shared/.env" || ! grep -qE '^MAIL_USERNAME=' "$APP_DIR/shared/.env"; then
+                echo "[WARN] MAIL_* not fully configured in shared .env (password reset emails may be skipped)";
+              fi
+              if ! grep -qE '^TWILIO_SID=' "$APP_DIR/shared/.env" || ! grep -qE '^TWILIO_AUTH_TOKEN=' "$APP_DIR/shared/.env" || ! grep -qE '^TWILIO_PHONE_NUMBER=' "$APP_DIR/shared/.env"; then
+                echo "[WARN] Twilio envs not set; SMS OTP will fallback to logs";
+              fi
+            fi
+
             # Optional healthcheck
             if [ -n "${BACKEND_HEALTHCHECK_URL}" ]; then
               echo "Running healthcheck: ${BACKEND_HEALTHCHECK_URL}"
@@ -136,6 +153,16 @@ jobs:
                 echo "Healthcheck failed"
                 exit 1
               fi
+            fi
+
+            # Post-deploy diagnostics (safe): verify symlinks and tail error logs
+            echo "public ->"; ls -l "$APP_DIR/public" || true
+            echo "index.php in current/public ->"; ls -l "$APP_DIR/current/public/index.php" || true
+            echo "--- Nginx error log (tail 200) ---"; tail -n 200 /var/log/nginx/error.log 2>/dev/null || true
+            if [ -d "/home/$SITE_USER/logs" ]; then
+              echo "--- Site logs directory listing ---"; ls -l "/home/$SITE_USER/logs" || true
+              for f in /home/$SITE_USER/logs/*error*.log; do
+                echo "== $f =="; tail -n 50 "$f"; done 2>/dev/null || true
             fi
 
             echo "Backend deploy complete: $REL_NAME"

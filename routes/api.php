@@ -38,9 +38,20 @@ Route::middleware([
             ->middleware('auth.jwt')
             ->name('api.mobile.auth.me');
 
-        // Registration can remain public
+        // Registration (legacy)
         Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
             ->name('api.mobile.auth.register');
+
+        // Registration v2 (phone-first with OTP)
+        Route::post('/auth/signup/request', [\App\Http\Controllers\Auth\SignupController::class, 'request'])
+            ->middleware(['throttle:signup'])
+            ->name('api.mobile.auth.signup.request');
+        Route::post('/auth/signup/resend', [\App\Http\Controllers\Auth\SignupController::class, 'resend'])
+            ->middleware(['throttle:resend-otp'])
+            ->name('api.mobile.auth.signup.resend');
+        Route::post('/auth/signup/verify', [\App\Http\Controllers\Auth\SignupController::class, 'verify'])
+            ->middleware(['throttle:otp-verify'])
+            ->name('api.mobile.auth.signup.verify');
 
     // Public banks endpoints (reuse existing logic)
     Route::get('/banks', [\App\Http\Controllers\BankController::class, 'list'])->name('api.mobile.banks');
@@ -69,13 +80,23 @@ Route::middleware([
         return response()->json($rates);
     })->name('api.mobile.health.oxr');
 
-        // Public password reset endpoints (must be accessible without auth)
+        // Public password reset endpoints (v1 kept), v2 adds OTP-based with tighter throttling
         Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.auth.forgot_password');
         Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.auth.reset_password');
+
+        // Password reset v2 (neutral, OTP-based)
+        Route::post('/auth/password/forgot', [\App\Http\Controllers\Auth\PasswordResetV2Controller::class, 'forgot'])
+            ->middleware(['throttle:reset-init'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.password.forgot');
+        Route::post('/auth/password/reset', [\App\Http\Controllers\Auth\PasswordResetV2Controller::class, 'reset'])
+            ->middleware(['throttle:reset-verify'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->name('api.mobile.auth.password.reset');
 
         // Authenticated routes
         Route::middleware(['auth.jwt', \App\Http\Middleware\EnsurePoliciesAccepted::class])->group(function () {
