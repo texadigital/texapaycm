@@ -38,8 +38,11 @@ Route::middleware([
             ->middleware('auth.jwt')
             ->name('api.mobile.auth.me');
 
-        // Registration (legacy)
+        // Registration (legacy) - requires session for Auth::login() + queued cookies
+        // Attach 'web' middleware to enable session/cookies, and disable CSRF for API POST
         Route::post('/auth/register', [\App\Http\Controllers\Api\AuthController::class, 'register'])
+            ->middleware(['web'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.auth.register');
 
         // Registration v2 (phone-first with OTP)
