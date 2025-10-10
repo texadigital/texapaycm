@@ -20,6 +20,11 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\ScreeningCheck::class => \App\Policies\ScreeningPolicy::class,
         \App\Models\AmlRule::class => \App\Policies\AmlRulePolicy::class,
         \App\Models\AmlRulePack::class => \App\Policies\AmlRulePackPolicy::class,
+        \App\Models\Settings\Fee::class => \App\Policies\AdminOnlyPolicy::class,
+        \App\Models\Settings\FxSpread::class => \App\Policies\AdminOnlyPolicy::class,
+        \App\Models\Settings\ProviderRoute::class => \App\Policies\AdminOnlyPolicy::class,
+        \App\Models\Settings\LimitRule::class => \App\Policies\AdminOnlyPolicy::class,
+        \App\Models\Settings\NotificationTemplate::class => \App\Policies\AdminOnlyPolicy::class,
         // TODO: map additional models to policies as they are introduced
     ];
 

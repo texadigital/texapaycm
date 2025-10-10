@@ -21,6 +21,8 @@ use Illuminate\View\View;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use App\Models\Settings\FeatureFlag;
+use App\Models\Settings\ProviderRoute;
 
 class TransferController extends Controller
 {
@@ -293,46 +295,76 @@ class TransferController extends Controller
         
         $msisdn = $validation['normalized'];
 
-        // Provider detection for Cameroon via .env-configurable prefixes
+        // Provider detection for Cameroon
         $prefix3 = substr($msisdn, 3, 3); // digits after 237
         $provider = env('PAWAPAY_PROVIDER', 'MTN_MOMO_CMR');
-        $mtnCode = env('PAWAPAY_PROVIDER_MTN', 'MTN_MOMO_CMR');
-        $orgCode = env('PAWAPAY_PROVIDER_ORANGE', 'ORANGE_CMR');
-        $autoDetect = filter_var(env('PAWAPAY_AUTODETECT_PROVIDER', true), FILTER_VALIDATE_BOOLEAN);
 
-        if ($autoDetect) {
-            $cfgMtn = trim((string) env('PAWAPAY_CM_MTN_PREFIXES', '650-659,670-689'));
-            $cfgOrg = trim((string) env('PAWAPAY_CM_ORANGE_PREFIXES', '690-699'));
-
-            $rangeToAlternation = function (string $ranges): string {
-                $parts = array_filter(array_map('trim', explode(',', $ranges)));
-                $alts = [];
-                foreach ($parts as $p) {
+        // If feature flag is enabled, prefer DB-backed provider routes (non-destructive)
+        if (FeatureFlag::isEnabled('routing.db_routes.enabled')) {
+            $routes = ProviderRoute::query()
+                ->where('corridor', PricingEngine::CORRIDOR_XAF_NGN)
+                ->where('active', true)
+                ->orderByDesc('weight')
+                ->get();
+            foreach ($routes as $route) {
+                $prefixes = (array) ($route->msisdn_prefixes ?? []);
+                // Accept exact 3-digit prefix or dash ranges like 650-659
+                foreach ($prefixes as $p) {
+                    $p = trim((string) $p);
                     if (preg_match('/^(\d{3})-(\d{3})$/', $p, $m)) {
                         $start = (int) $m[1];
                         $end = (int) $m[2];
-                        for ($i=$start; $i<=$end; $i++) { $alts[] = sprintf('%03d', $i); }
-                    } elseif (preg_match('/^\d{3}$/', $p)) {
-                        $alts[] = $p;
+                        $val = (int) $prefix3;
+                        if ($val >= $start && $val <= $end) {
+                            $provider = $route->provider_code;
+                            break 2;
+                        }
+                    } elseif (preg_match('/^\d{3}$/', $p) && $p === $prefix3) {
+                        $provider = $route->provider_code;
+                        break 2;
                     }
                 }
-                $alts = array_values(array_unique($alts));
-                return $alts ? '^(' . implode('|', $alts) . ')$' : '';
-            };
+            }
+        } else {
+            // Legacy env-configurable prefixes
+            $mtnCode = env('PAWAPAY_PROVIDER_MTN', 'MTN_MOMO_CMR');
+            $orgCode = env('PAWAPAY_PROVIDER_ORANGE', 'ORANGE_CMR');
+            $autoDetect = filter_var(env('PAWAPAY_AUTODETECT_PROVIDER', true), FILTER_VALIDATE_BOOLEAN);
 
-            $mtnRe = $rangeToAlternation($cfgMtn);
-            $orgRe = $rangeToAlternation($cfgOrg);
+            if ($autoDetect) {
+                $cfgMtn = trim((string) env('PAWAPAY_CM_MTN_PREFIXES', '650-659,670-689'));
+                $cfgOrg = trim((string) env('PAWAPAY_CM_ORANGE_PREFIXES', '690-699'));
 
-            if ($mtnRe && preg_match('/' . $mtnRe . '/', $prefix3)) {
-                $provider = $mtnCode;
-            } elseif ($orgRe && preg_match('/' . $orgRe . '/', $prefix3)) {
-                $provider = $orgCode;
-            } else {
-                // Fallback to default heuristics if config did not match
-                if (preg_match('/^(650|651|652|653|654|655|656|657|658|659|670|671|672|673|674|675|676|677|678|679|680|681|682|683|684|685|686|687|688|689)$/', $prefix3)) {
+                $rangeToAlternation = function (string $ranges): string {
+                    $parts = array_filter(array_map('trim', explode(',', $ranges)));
+                    $alts = [];
+                    foreach ($parts as $p) {
+                        if (preg_match('/^(\d{3})-(\d{3})$/', $p, $m)) {
+                            $start = (int) $m[1];
+                            $end = (int) $m[2];
+                            for ($i=$start; $i<=$end; $i++) { $alts[] = sprintf('%03d', $i); }
+                        } elseif (preg_match('/^\d{3}$/', $p)) {
+                            $alts[] = $p;
+                        }
+                    }
+                    $alts = array_values(array_unique($alts));
+                    return $alts ? '^(' . implode('|', $alts) . ')$' : '';
+                };
+
+                $mtnRe = $rangeToAlternation($cfgMtn);
+                $orgRe = $rangeToAlternation($cfgOrg);
+
+                if ($mtnRe && preg_match('/' . $mtnRe . '/', $prefix3)) {
                     $provider = $mtnCode;
-                } elseif (preg_match('/^(690|691|692|693|694|695|696|697|698|699)$/', $prefix3)) {
+                } elseif ($orgRe && preg_match('/' . $orgRe . '/', $prefix3)) {
                     $provider = $orgCode;
+                } else {
+                    // Fallback to default heuristics if config did not match
+                    if (preg_match('/^(650|651|652|653|654|655|656|657|658|659|670|671|672|673|674|675|676|677|678|679|680|681|682|683|684|685|686|687|688|689)$/', $prefix3)) {
+                        $provider = $mtnCode;
+                    } elseif (preg_match('/^(690|691|692|693|694|695|696|697|698|699)$/', $prefix3)) {
+                        $provider = $orgCode;
+                    }
                 }
             }
         }

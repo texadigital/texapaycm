@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\AdminSetting;
+use App\Models\Settings\FxSpread;
+use App\Models\Settings\Fee;
+use App\Models\Settings\FeatureFlag;
 
 class PricingEngine
 {
@@ -39,14 +42,44 @@ class PricingEngine
         }
 
         // FX margin bps (basis points)
+        // If feature flag is enabled, prefer DB-backed spread; else fallback to AdminSetting/env
         $marginBps = (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0));
+        if (FeatureFlag::isEnabled('pricing.db_settings.enabled')) {
+            $spread = FxSpread::query()
+                ->where('corridor', self::CORRIDOR_XAF_NGN)
+                ->where('active', true)
+                ->orderByDesc('updated_at')
+                ->first();
+            if ($spread) {
+                $marginBps = (int) $spread->margin_bps;
+            }
+        }
         $marginPct = max(0.0, $marginBps / 100.0); // convert bps to percent
         $effective = $interbank * (1 - ($marginBps / 10000));
 
         // Free threshold and tiers
         $threshold = (int) AdminSetting::getValue('pricing.min_free_transfer_threshold_xaf', 0);
-        $tiers = AdminSetting::getValue('pricing.fee_tiers', []);
-        if (!is_array($tiers)) { $tiers = []; }
+        $tiers = [];
+        if (FeatureFlag::isEnabled('pricing.db_settings.enabled')) {
+            // Build tiers from Fee table for corridor
+            $feeRows = Fee::query()
+                ->where('corridor', self::CORRIDOR_XAF_NGN)
+                ->where('active', true)
+                ->orderBy('min_xaf')
+                ->get();
+            foreach ($feeRows as $f) {
+                $tiers[] = [
+                    'min' => (int) $f->min_xaf,
+                    'max' => (int) ($f->max_xaf ?: PHP_INT_MAX),
+                    'flat_xaf' => (int) $f->flat_xaf,
+                    'percent_bps' => (int) $f->percent_bps,
+                    'cap_xaf' => (int) $f->cap_xaf,
+                ];
+            }
+        } else {
+            $tiers = AdminSetting::getValue('pricing.fee_tiers', []);
+            if (!is_array($tiers)) { $tiers = []; }
+        }
 
         $fee = 0;
         if ($amountXaf > $threshold) {
