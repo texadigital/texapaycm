@@ -14,6 +14,10 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         \App\Models\Settings\FeatureFlag::class => \App\Policies\FeatureFlagPolicy::class,
+        \App\Models\KycProfile::class => \App\Policies\KycProfilePolicy::class,
+        \App\Models\AmlStr::class => \App\Policies\AmlStrPolicy::class,
+        \App\Models\EddCase::class => \App\Policies\EddCasePolicy::class,
+        \App\Models\ScreeningCheck::class => \App\Policies\ScreeningPolicy::class,
         // TODO: map additional models to policies as they are introduced
     ];
 
