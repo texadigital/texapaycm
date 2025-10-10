@@ -59,6 +59,104 @@ class Kernel extends ConsoleKernel
         $schedule->call(function () {
             \Log::info('Scheduler is running at ' . now());
         })->everyMinute();
+
+        // AML: Batch evaluate rules hourly over recent successful transfers (last 24h)
+        $schedule->call(function () {
+            try {
+                $since = now()->subDay();
+                $transfers = \App\Models\Transfer::query()
+                    ->whereIn('status', ['completed','payout_success'])
+                    ->where('updated_at', '>=', $since)
+                    ->limit(1000)
+                    ->get();
+                $evaluator = app(\App\Services\AmlRuleEvaluator::class);
+                foreach ($transfers as $t) {
+                    $evaluator->evaluateTransfer($t, 'batch_hourly');
+                }
+                \Log::info('AML batch rule evaluation completed', ['count' => $transfers->count()]);
+            } catch (\Throwable $e) {
+                \Log::error('AML batch evaluation failed', ['error' => $e->getMessage()]);
+            }
+        })->hourly()->runInBackground();
+
+        // Screening: Daily sanctions/adverse media rescan (lightweight stub)
+        $schedule->call(function () {
+            try {
+                $screen = app(\App\Services\ScreeningService::class);
+                \App\Models\User::query()
+                    ->whereNull('deleted_at')
+                    ->limit(200)
+                    ->orderBy('id')
+                    ->chunk(200, function ($users) use ($screen) {
+                        foreach ($users as $u) {
+                            $screen->runUserScreening($u, 'periodic');
+                        }
+                    });
+                \Log::info('Screening daily rescan enqueued');
+            } catch (\Throwable $e) {
+                \Log::error('Screening daily rescan failed', ['error' => $e->getMessage()]);
+            }
+        })->dailyAt('02:00')->runInBackground();
+
+        // PEP: Weekly rescan (subset for demo)
+        $schedule->call(function () {
+            try {
+                $screen = app(\App\Services\ScreeningService::class);
+                \App\Models\User::query()
+                    ->whereNull('deleted_at')
+                    ->limit(200)
+                    ->orderBy('id')
+                    ->chunk(200, function ($users) use ($screen) {
+                        foreach ($users as $u) {
+                            $screen->runUserScreening($u, 'periodic');
+                        }
+                    });
+                \Log::info('PEP weekly rescan enqueued');
+            } catch (\Throwable $e) {
+                \Log::error('PEP weekly rescan failed', ['error' => $e->getMessage()]);
+            }
+        })->weeklyOn(1, '03:00')->runInBackground();
+
+        // EDD: Six-month re-verification for high-risk/PEP users (daily sweep)
+        $schedule->call(function () {
+            try {
+                $enabled = (bool) \App\Models\AdminSetting::getValue('aml.edd.six_month_reverify_enabled', true);
+                if (!$enabled) { return; }
+                $since = now()->subMonths(6);
+                $screen = app(\App\Services\ScreeningService::class);
+                // Find users with EDD cases indicating high-risk/PEP whose case updated_at is older than 6 months
+                \App\Models\EddCase::query()
+                    ->whereIn('status', ['approved','closed','review'])
+                    ->where('updated_at', '<=', $since)
+                    ->where(function ($q) {
+                        $q->where('metadata->senior_mgmt_required', true)
+                          ->orWhere('metadata->requires_mlro_approval', true);
+                    })
+                    ->limit(200)
+                    ->chunk(200, function ($cases) use ($screen) {
+                        foreach ($cases as $case) {
+                            if ($case->user) {
+                                $screen->runUserScreening($case->user, 'six_month_reverify');
+                            }
+                        }
+                    });
+                \Log::info('EDD six-month reverify sweep completed');
+            } catch (\Throwable $e) {
+                \Log::error('EDD six-month reverify sweep failed', ['error' => $e->getMessage()]);
+            }
+        })->dailyAt('04:00')->runInBackground();
+
+        // STR: Daily review reminder for open drafts
+        $schedule->call(function () {
+            try {
+                $open = \App\Models\AmlStr::query()->where('status', 'draft')->count();
+                if ($open > 0) {
+                    \Log::warning('STR review pending', ['open_drafts' => $open]);
+                }
+            } catch (\Throwable $e) {
+                \Log::error('STR review reminder failed', ['error' => $e->getMessage()]);
+            }
+        })->dailyAt('09:00')->runInBackground();
     }
 
     /**

@@ -40,61 +40,71 @@ jobs:
 
       - name: Remote build, switch symlink, and reload PM2/Nginx
         run: |
-          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "${VPS_USER}@${VPS_HOST}" bash -lc '
-            set -euo pipefail
-            APP_DIR='"${VPS_APP_DIR}"'
-            REL_NAME='"${REL}"'
-            REL="$APP_DIR/releases/$REL_NAME"
-            echo "Using release: $REL"
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "${VPS_USER}@${VPS_HOST}" 'bash -s' <<EOF
+          set -euo pipefail
+          APP_DIR="${VPS_APP_DIR}"
+          REL_NAME="${REL}"
+          REL="$APP_DIR/releases/$REL_NAME"
+          echo "Using release: $REL"
 
-            # Ensure shared env exists
-            if [ ! -f "$APP_DIR/shared/.env.production" ]; then
-              echo "Missing $APP_DIR/shared/.env.production"; exit 1; fi
+          # Diagnostics
+          echo "APP_DIR=">$APP_DIR || true
+          [ -z "$APP_DIR" ] && { echo "ERROR: APP_DIR empty. Set VPS_APP_DIR secret"; exit 1; }
+          mkdir -p "$APP_DIR/shared" || true
+          echo "--- ls $APP_DIR ---"; ls -la "$APP_DIR" || true
+          echo "--- ls $APP_DIR/shared ---"; ls -la "$APP_DIR/shared" || true
 
-            # Link env into release
-            ln -sfn "$APP_DIR/shared/.env.production" "$REL/.env.production"
+          # Ensure shared env exists
+          if [ ! -f "$APP_DIR/shared/.env.production" ]; then
+            echo "Missing $APP_DIR/shared/.env.production"; exit 1; fi
 
-            # Ensure Node 18+/20+ and PM2 are available
-            if ! command -v node >/dev/null 2>&1; then
-              echo "Node.js is not installed. Please install Node 18+ and PM2, then re-run."; exit 1
-            fi
-            if ! command -v pm2 >/dev/null 2>&1; then
-              npm install -g pm2 || { echo "Failed to install PM2"; exit 1; }
-            fi
+          # Link env into release
+          ln -sfn "$APP_DIR/shared/.env.production" "$REL/.env.production"
 
-            export CI=true
-            # Cap memory to avoid OOM on small VPS
-            export NODE_OPTIONS="--max_old_space_size=512"
-            # Ensure npm installs devDependencies regardless of server env
-            npm config set production false --location=project || true
+          # Ensure Node and PM2
+          if ! command -v node >/dev/null 2>&1; then
+            echo "Node.js is not installed. Install Node 18+/20+"; exit 1
+          fi
+          command -v pm2 >/dev/null 2>&1 || npm i -g pm2
 
-            cd "$REL"
-            # Install deps WITH devDependencies (required to transpile next.config.ts)
-            # Do NOT set NODE_ENV=production before this step, or npm will skip dev deps
-            NPM_CONFIG_PRODUCTION=false npm ci --no-audit --no-fund --prefer-offline \
-              || NPM_CONFIG_PRODUCTION=false npm install --no-audit --no-fund
-            # Guard: ensure TypeScript is present for next.config.ts
-            if ! node -e "require.resolve('typescript')" >/dev/null 2>&1; then
-              echo "TypeScript not found after install; installing dev types"
-              npm install -D typescript @types/node @types/react @types/react-dom --no-audit --no-fund
-            fi
-            # Diagnostics before build
-            node -v; npm -v; npm ls typescript || true
-            # Build Next app
-            NEXT_TELEMETRY_DISABLED=1 npm run build
+          export CI=true
+          export NODE_OPTIONS="--max_old_space_size=512"
+          npm config set production false --location=project || true
 
-            # Switch current symlink
-            ln -sfn "$REL" "$APP_DIR/current"
+          cd "$REL"
+          NPM_CONFIG_PRODUCTION=false npm ci --no-audit --no-fund --prefer-offline \
+            || NPM_CONFIG_PRODUCTION=false npm install --no-audit --no-fund
+          if ! node -e "require.resolve('typescript')" >/dev/null 2>&1; then
+            npm i -D typescript @types/node @types/react @types/react-dom --no-audit --no-fund
+          fi
+          node -v; npm -v; npm ls typescript || true
+          NEXT_TELEMETRY_DISABLED=1 npm run build
 
-            # PM2 app (port 3005)
-            if pm2 describe texa-pwa >/dev/null 2>&1; then
-              pm2 reload texa-pwa --update-env
-            else
-              NODE_ENV=production pm2 start npm --name texa-pwa -- run start -- -p 3005
-            fi
-            pm2 save || true
+          # Switch current symlink used by Nginx
+          ln -sfn "$REL" "$APP_DIR/current"
 
-            # Reload Nginx
-            nginx -t && systemctl reload nginx || true
-            echo "Deploy complete: $REL_NAME"
-          '
+          # PM2: stop existing and free port 3005
+          pm2 delete texa-pwa 2>/dev/null || true
+          if command -v lsof >/dev/null 2>&1; then
+            PIDS=$(lsof -t -i:3005 || true); [ -n "$PIDS" ] && kill -9 $PIDS || true
+          else
+            PIDS=$(ss -ltnp | awk '/:3005 /{print $NF}' | sed 's/.*pid=\([0-9]*\).*/\1/' | sort -u || true)
+            [ -n "$PIDS" ] && kill -9 $PIDS || true
+          fi
+
+          # Start as current dir (owned by site user)
+          cd "$APP_DIR/current"
+          NODE_ENV=production PORT=3005 HOST=127.0.0.1 pm2 start npm --name texa-pwa -- run start -- -p 3005
+          pm2 save || true
+
+          # Verify app responds locally before reloading Nginx
+          sleep 3
+          if ! curl -fsS http://127.0.0.1:3005/ >/dev/null; then
+            echo "Local 3005 not responding"; pm2 logs texa-pwa --lines 200 || true; exit 1
+          fi
+
+          # Reload Nginx
+          nginx -t && systemctl reload nginx || true
+          echo "Deploy complete: $REL_NAME"
+          exit 0
+          EOF

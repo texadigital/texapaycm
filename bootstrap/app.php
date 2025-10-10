@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.json' => \App\Http\Middleware\ForceJson::class,
             'idempotency' => \App\Http\Middleware\EnforceIdempotency::class,
             'auth.jwt' => \App\Http\Middleware\RequireAccessToken::class,
+            'check.aml' => \App\Http\Middleware\CheckAml::class,
 
         ]);
 

@@ -30,7 +30,7 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
 
     Route::get('/quote', [\App\Http\Controllers\TransferController::class, 'showQuoteForm'])->name('transfer.quote');
     Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
-        ->middleware('check.limits')
+        ->middleware(['check.limits','check.aml'])
         ->name('transfer.quote.create');
     Route::post('/quote/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
 
@@ -124,6 +124,10 @@ Route::post('/webhooks/pawapay', [\App\Http\Controllers\Webhooks\PawaPayWebhookC
 Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('kyc.smileid.callback');
+
+// KYC: Smile ID health (public, no external requests)
+Route::get('/api/kyc/smileid/health', [SmileIdController::class, 'health'])
+    ->name('kyc.smileid.health');
 
 // Refund webhook (PawaPay sends refund status callbacks here)
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])

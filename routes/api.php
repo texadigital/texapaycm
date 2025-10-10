@@ -114,6 +114,7 @@ Route::middleware([
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.kyc.smileid.web_token');
         Route::get('/kyc/status', [\App\Http\Controllers\Kyc\KycController::class, 'status'])->name('api.mobile.kyc.status');
+        Route::get('/kyc/edd', [\App\Http\Controllers\Kyc\SmileIdController::class, 'edd'])->name('api.mobile.kyc.edd');
 
         // Transfers JSON orchestration
         Route::get('/transfers', [\App\Http\Controllers\Api\TransfersController::class, 'index'])->name('api.mobile.transfers.index');
@@ -126,11 +127,11 @@ Route::middleware([
             ->name('api.mobile.transfers.name_enquiry');
         Route::post('/transfers/quote', [\App\Http\Controllers\Api\TransfersController::class, 'quote'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->middleware(['throttle:20,1', 'check.limits'])
+            ->middleware(['throttle:20,1', 'check.limits', 'check.aml'])
             ->name('api.mobile.transfers.quote');
         Route::post('/transfers/confirm', [\App\Http\Controllers\Api\TransfersController::class, 'confirm'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->middleware(['throttle:20,1', 'check.limits'])
+            ->middleware(['throttle:20,1', 'check.limits', 'check.aml'])
             ->name('api.mobile.transfers.confirm');
         Route::post('/transfers/{transfer}/payin/status', [\App\Http\Controllers\Api\TransfersController::class, 'payinStatus'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
