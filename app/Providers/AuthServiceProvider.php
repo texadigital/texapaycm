@@ -18,6 +18,8 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\AmlStr::class => \App\Policies\AmlStrPolicy::class,
         \App\Models\EddCase::class => \App\Policies\EddCasePolicy::class,
         \App\Models\ScreeningCheck::class => \App\Policies\ScreeningPolicy::class,
+        \App\Models\AmlRule::class => \App\Policies\AmlRulePolicy::class,
+        \App\Models\AmlRulePack::class => \App\Policies\AmlRulePackPolicy::class,
         // TODO: map additional models to policies as they are introduced
     ];
 
