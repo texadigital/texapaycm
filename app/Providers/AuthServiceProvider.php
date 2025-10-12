@@ -25,6 +25,7 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\Settings\ProviderRoute::class => \App\Policies\AdminOnlyPolicy::class,
         \App\Models\Settings\LimitRule::class => \App\Policies\AdminOnlyPolicy::class,
         \App\Models\Settings\NotificationTemplate::class => \App\Policies\AdminOnlyPolicy::class,
+        \App\Models\WebhookEvent::class => \App\Policies\WebhookEventPolicy::class,
         // TODO: map additional models to policies as they are introduced
     ];
 

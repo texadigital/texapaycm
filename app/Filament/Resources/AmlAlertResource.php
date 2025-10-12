@@ -16,7 +16,8 @@ class AmlAlertResource extends Resource
     protected static ?string $model = AmlAlert::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-exclamation-triangle';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 550;
     protected static ?string $navigationLabel = 'AML Alerts';
 
     public static function form(Schema $schema): Schema
@@ -35,7 +36,7 @@ class AmlAlertResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('id')->sortable(),
                 Tables\Columns\TextColumn::make('user.name')->label('User')->searchable(),
-                Tables\Columns\TextColumn::make('transfer_id')->label('Transfer')->toggleable(),
+                Tables\Columns\TextColumn::make('transfer_id')->label('Transfer')->copyable()->toggleable(),
                 Tables\Columns\BadgeColumn::make('severity')->colors([
                     'success' => 'low', 'warning' => 'medium', 'danger' => 'high', 'gray' => 'critical',
                 ])->sortable(),
@@ -43,7 +44,7 @@ class AmlAlertResource extends Resource
                     'danger' => 'open', 'warning' => 'investigating', 'success' => 'closed',
                 ])->sortable(),
                 Tables\Columns\TextColumn::make('rule_key')->searchable(),
-                Tables\Columns\TextColumn::make('created_at')->since(),
+                Tables\Columns\TextColumn::make('created_at')->dateTime('Y-m-d H:i')->since()->label('Created'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')->options([

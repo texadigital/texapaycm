@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 
 class SystemHealthWidget extends Widget
 {
-    protected static string $view = 'filament.widgets.system-health';
+    protected string $view = 'filament.widgets.system-health';
 
     protected int|string|array $columnSpan = 'full';
 

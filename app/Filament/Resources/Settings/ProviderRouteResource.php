@@ -6,6 +6,7 @@ use App\Filament\Resources\Settings\ProviderRouteResource\Pages;
 use App\Models\Settings\ProviderRoute;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Actions;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,8 +15,9 @@ class ProviderRouteResource extends Resource
 {
     protected static ?string $model = ProviderRoute::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-arrows-right-left';
-    protected static ?string $navigationGroup = 'Providers';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-arrows-right-left';
+    protected static string|\UnitEnum|null $navigationGroup = 'Providers';
+    protected static ?int $navigationSort = 610;
     protected static ?string $navigationLabel = 'Provider Routes';
 
     public static function form(Schema $schema): Schema
@@ -48,12 +50,12 @@ class ProviderRouteResource extends Resource
                 ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }

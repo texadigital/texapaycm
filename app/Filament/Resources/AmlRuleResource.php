@@ -16,7 +16,8 @@ class AmlRuleResource extends Resource
     protected static ?string $model = AmlRule::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-queue-list';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 530;
     protected static ?string $navigationLabel = 'AML Rules';
 
     public static function form(Schema $schema): Schema

@@ -16,7 +16,8 @@ class AmlRulePackResource extends Resource
     protected static ?string $model = AmlRulePack::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 540;
     protected static ?string $navigationLabel = 'Rule Packs';
 
     public static function form(Schema $schema): Schema

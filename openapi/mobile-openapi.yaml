@@ -872,18 +872,9 @@ paths:
             schema:
               $ref: '#/components/schemas/SupportReplyRequest'
           application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/SupportReplyRequest'
       responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-components:
+        '200': { description: OK }
+  components:
   schemas:
     SuggestBankRequest:
       type: object

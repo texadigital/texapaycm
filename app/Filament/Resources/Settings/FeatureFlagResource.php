@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Settings;
 use App\Filament\Resources\Settings\FeatureFlagResource\Pages;
 use App\Models\Settings\FeatureFlag;
 use Filament\Resources\Resource;
+use Filament\Actions;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,8 +15,9 @@ class FeatureFlagResource extends Resource
 {
     protected static ?string $model = FeatureFlag::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-flag';
-    protected static ?string $navigationGroup = 'Content & Settings';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-flag';
+    protected static string|\UnitEnum|null $navigationGroup = 'Settings';
+    protected static ?int $navigationSort = 810;
     protected static ?string $navigationLabel = 'Feature Flags';
 
     public static function form(Schema $schema): Schema
@@ -53,12 +55,12 @@ class FeatureFlagResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->sortable()->toggleable(),
-                Tables\Columns\TextColumn::make('key')->searchable()->sortable(),
-                Tables\Columns\IconColumn::make('enabled')->boolean()->sortable(),
-                Tables\Columns\TextColumn::make('rollout_percent')->label('Rollout %')->sortable(),
-                Tables\Columns\TextColumn::make('category')->sortable(),
-                Tables\Columns\TextColumn::make('updated_at')->since()->sortable(),
+                Tables\Columns\TextColumn::make('id')->label('ID')->sortable()->toggleable(),
+                Tables\Columns\TextColumn::make('key')->label('Flag Key')->searchable()->sortable(),
+                Tables\Columns\IconColumn::make('enabled')->boolean()->label('Enabled')->sortable(),
+                Tables\Columns\TextColumn::make('rollout_percent')->label('Rollout %')->alignRight()->sortable(),
+                Tables\Columns\TextColumn::make('category')->label('Category')->sortable(),
+                Tables\Columns\TextColumn::make('updated_at')->dateTime('Y-m-d H:i')->since()->label('Updated')->sortable(),
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('enabled')->boolean(),
@@ -73,12 +75,12 @@ class FeatureFlagResource extends Resource
                 ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make()->visible(fn () => auth()->user()?->is_admin),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make()->visible(fn () => auth()->user()?->is_admin),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()->visible(fn () => auth()->user()?->is_admin),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make()->visible(fn () => auth()->user()?->is_admin),
                 ]),
             ]);
     }

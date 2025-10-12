@@ -6,6 +6,7 @@ use App\Filament\Resources\Settings\FxSpreadResource\Pages;
 use App\Models\Settings\FxSpread;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Actions;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,8 +15,9 @@ class FxSpreadResource extends Resource
 {
     protected static ?string $model = FxSpread::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
-    protected static ?string $navigationGroup = 'Fees & Pricing';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-chart-bar';
+    protected static string|\UnitEnum|null $navigationGroup = 'Pricing';
+    protected static ?int $navigationSort = 420;
     protected static ?string $navigationLabel = 'FX Spreads';
 
     public static function form(Schema $schema): Schema
@@ -46,12 +48,12 @@ class FxSpreadResource extends Resource
                 ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -65,3 +67,4 @@ class FxSpreadResource extends Resource
         ];
     }
 }
+

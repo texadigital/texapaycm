@@ -16,23 +16,24 @@ class AmlStrResource extends Resource
     protected static ?string $model = AmlStr::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-exclamation-triangle';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 560;
     protected static ?string $navigationLabel = 'STRs';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Forms\Components\TextInput::make('id')->disabled()->label('ID'),
-            Forms\Components\TextInput::make('reason')->disabled(),
+            Forms\Components\TextInput::make('id')->label('ID')->disabled(),
+            Forms\Components\TextInput::make('reason')->label('Reason')->disabled(),
             Forms\Components\Select::make('status')->options([
                 'draft' => 'Draft',
                 'submitted' => 'Submitted',
                 'rejected' => 'Rejected',
             ])->disabled(),
-            Forms\Components\TextInput::make('user_id')->label('User')->disabled(),
+            Forms\Components\TextInput::make('user.name')->label('User')->disabled(),
             Forms\Components\TextInput::make('transfer_id')->label('Transfer')->disabled(),
             Forms\Components\Textarea::make('payload')->label('Payload (JSON)')
-                ->formatStateUsing(fn ($state) => is_array($state) ? json_encode($state) : (string) $state)
+                ->formatStateUsing(fn ($state) => is_array($state) ? json_encode($state, JSON_PRETTY_PRINT) : (string) $state)
                 ->disabled()
                 ->columnSpanFull(),
         ]);
@@ -42,17 +43,20 @@ class AmlStrResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->sortable(),
-                Tables\Columns\TextColumn::make('user_id')->label('User')->sortable(),
-                Tables\Columns\TextColumn::make('transfer_id')->label('Transfer')->sortable(),
+                Tables\Columns\TextColumn::make('id')->label('ID')->sortable(),
+                Tables\Columns\TextColumn::make('user.name')->label('User')->searchable(),
+                Tables\Columns\TextColumn::make('user.email')->label('Email')->toggleable()->searchable(),
+                Tables\Columns\TextColumn::make('transfer_id')->label('Transfer')->copyable()->sortable(),
                 Tables\Columns\BadgeColumn::make('status')->colors([
                     'warning' => 'draft',
                     'success' => 'submitted',
                     'danger' => 'rejected',
                 ])->sortable(),
-                Tables\Columns\TextColumn::make('reason')->wrap(),
-                Tables\Columns\TextColumn::make('submitted_at')->dateTime()->since(),
-                Tables\Columns\TextColumn::make('created_at')->dateTime()->since(),
+                Tables\Columns\TextColumn::make('reason')->label('Reason')->wrap(),
+                Tables\Columns\TextColumn::make('submitted_at')->label('Submitted')
+                    ->dateTime('Y-m-d H:i')->since()->toggleable(),
+                Tables\Columns\TextColumn::make('created_at')->label('Created')
+                    ->dateTime('Y-m-d H:i')->since()->sortable(),
             ])
             ->filters([])
             ->actions([

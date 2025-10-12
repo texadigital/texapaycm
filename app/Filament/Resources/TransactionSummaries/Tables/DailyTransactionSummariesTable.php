@@ -16,12 +16,14 @@ class DailyTransactionSummariesTable
                 TextColumn::make('id')->label('ID')->sortable(),
                 TextColumn::make('user.name')->label('User')->searchable(),
                 TextColumn::make('user.email')->label('Email')->searchable()->toggleable(),
-                TextColumn::make('transaction_date')->date()->sortable()->label('Date'),
-                TextColumn::make('total_amount_xaf')->numeric()->label('Total XAF')->sortable(),
-                TextColumn::make('transaction_count')->numeric()->label('Count')->sortable(),
-                TextColumn::make('successful_amount_xaf')->numeric()->label('Successful XAF')->sortable(),
-                TextColumn::make('successful_count')->numeric()->label('Successful Cnt')->sortable(),
-                TextColumn::make('created_at')->dateTime()->since()->label('Created')->toggleable(),
+                TextColumn::make('transaction_date')->date('Y-m-d')->sortable()->label('Date'),
+                TextColumn::make('total_amount_xaf')->label('Total')
+                    ->money('XAF', locale: 'en_CM')->alignRight()->sortable(),
+                TextColumn::make('transaction_count')->label('Count')->alignRight()->sortable(),
+                TextColumn::make('successful_amount_xaf')->label('Successful')
+                    ->money('XAF', locale: 'en_CM')->alignRight()->sortable(),
+                TextColumn::make('successful_count')->label('Successful Cnt')->alignRight()->sortable(),
+                TextColumn::make('created_at')->dateTime('Y-m-d H:i')->since()->label('Created')->toggleable()->sortable(),
             ])
             ->filters([
                 Filter::make('transaction_date')
@@ -38,6 +40,13 @@ class DailyTransactionSummariesTable
                 SelectFilter::make('user_id')
                     ->relationship('user', 'email')
                     ->label('User'),
+            ])
+            ->headerActions([
+                \Filament\Actions\Action::make('export_csv')
+                    ->label('Export CSV')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->url('/admin/exports/daily-summaries.csv', true),
             ]);
     }
 }
+

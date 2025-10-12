@@ -16,7 +16,8 @@ class ScreeningResource extends Resource
     protected static ?string $model = ScreeningCheck::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-identification';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 555;
     protected static ?string $navigationLabel = 'Screening Checks';
 
     public static function form(Schema $schema): Schema
@@ -78,3 +79,4 @@ class ScreeningResource extends Resource
         ];
     }
 }
+

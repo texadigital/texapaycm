@@ -62,7 +62,7 @@ class SupportTicketResource extends Resource
             ])
             ->bulkActions([
                 Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }

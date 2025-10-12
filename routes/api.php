@@ -83,14 +83,6 @@ Route::middleware([
         return response()->json($rates);
     })->name('api.mobile.health.oxr');
 
-        // Public password reset endpoints (v1 kept), v2 adds OTP-based with tighter throttling
-        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->name('api.mobile.auth.forgot_password');
-        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->name('api.mobile.auth.reset_password');
-
         // Password reset v2 (neutral, OTP-based)
         Route::post('/auth/password/forgot', [\App\Http\Controllers\Auth\PasswordResetV2Controller::class, 'forgot'])
             ->middleware(['throttle:reset-init'])

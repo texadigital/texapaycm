@@ -18,6 +18,8 @@ class UserLimitResource extends Resource
     protected static ?string $model = UserLimit::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 510;
 
     public static function form(Schema $schema): Schema
     {

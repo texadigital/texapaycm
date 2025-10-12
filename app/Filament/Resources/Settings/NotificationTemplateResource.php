@@ -6,6 +6,7 @@ use App\Filament\Resources\Settings\NotificationTemplateResource\Pages;
 use App\Models\Settings\NotificationTemplate;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Actions;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,8 +15,9 @@ class NotificationTemplateResource extends Resource
 {
     protected static ?string $model = NotificationTemplate::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-bell';
-    protected static ?string $navigationGroup = 'Notifications';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-bell';
+    protected static string|\UnitEnum|null $navigationGroup = 'Notifications';
+    protected static ?int $navigationSort = 710;
     protected static ?string $navigationLabel = 'Templates';
 
     public static function form(Schema $schema): Schema
@@ -38,11 +40,11 @@ class NotificationTemplateResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->sortable()->toggleable(),
-                Tables\Columns\TextColumn::make('event_key')->sortable()->searchable(),
-                Tables\Columns\TextColumn::make('channel')->sortable()->searchable(),
-                Tables\Columns\IconColumn::make('enabled')->boolean()->sortable(),
-                Tables\Columns\TextColumn::make('updated_at')->since()->sortable(),
+                Tables\Columns\TextColumn::make('id')->label('ID')->sortable()->toggleable(),
+                Tables\Columns\TextColumn::make('event_key')->label('Event Key')->sortable()->searchable(),
+                Tables\Columns\TextColumn::make('channel')->label('Channel')->sortable()->searchable(),
+                Tables\Columns\IconColumn::make('enabled')->boolean()->label('Enabled')->sortable(),
+                Tables\Columns\TextColumn::make('updated_at')->dateTime('Y-m-d H:i')->since()->label('Updated')->sortable(),
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('enabled')->boolean(),
@@ -53,12 +55,12 @@ class NotificationTemplateResource extends Resource
                 ]),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -18,6 +18,14 @@ class AdminSettingResource extends Resource
     protected static ?string $model = AdminSetting::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
+    protected static string|\UnitEnum|null $navigationGroup = 'Settings';
+    protected static ?int $navigationSort = 820;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        // Hide legacy Admin Settings from the sidebar to keep a single Settings entry.
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {

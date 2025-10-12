@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Kyc\SmileIdController;
 use App\Http\Controllers\Kyc\KycController;
+use App\Http\Controllers\Exports\AdminExportController;
 
 Route::get('/', function () {
     // If an admin lands on root, send them to Filament admin
@@ -18,10 +19,16 @@ Route::middleware(['auth'])
     ->get('/api/pricing/preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])
     ->name('api.pricing.preview');
 
-// Admin-friendly receipt route (avoid redirect.admins so admins can view receipts)
+// Admin-friendly routes (keep inside auth)
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/transfer/{transfer}/receipt', [\App\Http\Controllers\TransferController::class, 'showReceipt'])
         ->name('admin.transfer.receipt');
+
+    // Admin CSV exports
+    Route::get('/admin/exports/transfers.csv', [AdminExportController::class, 'transfersCsv'])
+        ->name('admin.exports.transfers');
+    Route::get('/admin/exports/daily-summaries.csv', [AdminExportController::class, 'dailySummariesCsv'])
+        ->name('admin.exports.daily_summaries');
 });
 
 Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(function () {

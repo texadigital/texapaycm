@@ -16,7 +16,8 @@ class EddCaseResource extends Resource
     protected static ?string $model = EddCase::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-exclamation';
-    protected static string|\UnitEnum|null $navigationGroup = 'Compliance';
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 570;
     protected static ?string $navigationLabel = 'EDD Cases';
 
     public static function form(Schema $schema): Schema
