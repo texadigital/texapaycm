@@ -24,6 +24,7 @@ class Kernel extends ConsoleKernel
         Commands\TestRefundStatus::class,
         Commands\ReconcileTransfers::class,
         Commands\DebugPayinStatus::class,
+        Commands\ProtectedAutoRelease::class,
     ];
 
     /**
@@ -59,6 +60,13 @@ class Kernel extends ConsoleKernel
         $schedule->call(function () {
             \Log::info('Scheduler is running at ' . now());
         })->everyMinute();
+
+        // Protected auto-release: run every 10 minutes
+        $schedule->command('protected:auto-release --limit=100')
+            ->everyTenMinutes()
+            ->withoutOverlapping()
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/protected-auto-release.log'));
 
         // AML: Batch evaluate rules hourly over recent successful transfers (last 24h)
         $schedule->call(function () {

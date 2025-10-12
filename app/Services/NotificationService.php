@@ -234,6 +234,36 @@ class NotificationService
                 'message' => 'Your refund has been processed successfully. The funds have been returned to your account.',
             ],
 
+            // Protected (Escrow)
+            'protected.locked' => [
+                'title' => 'Funds Held in Escrow',
+                'message' => 'Your payment has been received and is being held securely. You can approve release when satisfied.',
+            ],
+            'protected.approval.requested' => [
+                'title' => 'Release Requested',
+                'message' => 'The seller has requested a release of funds. Please review and approve if satisfied.',
+            ],
+            'protected.approved' => [
+                'title' => 'Funds Released',
+                'message' => 'You approved the release. The seller is being paid now.',
+            ],
+            'protected.auto_release' => [
+                'title' => 'Funds Auto-Released',
+                'message' => 'Funds were released automatically after the waiting period.',
+            ],
+            'protected.disputed' => [
+                'title' => 'Dispute Opened',
+                'message' => 'You opened a dispute. Our team will review and keep the funds on hold.',
+            ],
+            'protected.payout.success' => [
+                'title' => 'Escrow Completed',
+                'message' => 'Funds have been paid to the seller. Thank you for using Texa Protected.',
+            ],
+            'protected.payout.failed' => [
+                'title' => 'Payout Issue',
+                'message' => 'We could not complete the payout to the seller yet. We are retrying and will update you.',
+            ],
+
             // Support
             'support.ticket.created' => [
                 'title' => 'Support Ticket Created',

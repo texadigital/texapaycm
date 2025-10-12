@@ -237,12 +237,16 @@ export default function DashboardPage() {
           <section className="border rounded p-4">
             <div className="text-base font-medium">Send Money</div>
             <div className="text-sm text-gray-600 mb-3">To bank · Pay with Mobile Money</div>
-            <Link href="/transfer/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start Transfer</Link>
+            <div className="flex items-center gap-2">
+              <Link href="/transfer/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start Transfer</Link>
+              <Link href="/protected/verify" className="inline-block bg-black text-white text-sm px-3 py-1.5 rounded">Start Protected</Link>
+            </div>
           </section>
 
           {/* D) Quick Actions */}
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Link href="/transfer/verify" className="border rounded p-3 text-center">Start Transfer</Link>
+            <Link href="/protected/verify" className="border rounded p-3 text-center">Start Protected</Link>
             <Link href="/transfers" className="border rounded p-3 text-center">Transfer History</Link>
             {/* Recipients and Rates hidden if not present; placeholders omitted */}
           </section>
