@@ -1,538 +1,146 @@
 {
   "info": {
-    "name": "TexaPay Mobile API",
+    "name": "TexaPay Mobile API (Grouped)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\n=== TRANSFER TESTING INSTRUCTIONS ===\n\n1. Get a Quote:\n   - Use the \"Transfers - Quote\" request\n   - Save the `quote.id` and `quote.ref` from the response\n\n2. Set Variables:\n   - Update `quoteId` with the ID from the quote response\n   - Update `quoteRef` with the reference from the quote response\n\n3. Confirm Transfer:\n   - Use the \"Transfers - Confirm\" request\n   - It will automatically use all required fields from environment variables\n\n4. Check Status & Payout:\n   - Use \"Transfers - Payin Status\" to poll the pay-in\n   - Then use \"Transfers - Payout\" and \"Transfers - Payout Status\" as needed\n\n5. Receipts:\n   - Use \"Transfers - Receipt URL\" (HTML shared link)\n   - Use \"Transfers - Receipt PDF\" to get a signed PDF URL\n   - Use \"Transfers - Share URL\" to generate a public signed link\n\nNote: Make sure to log in first to establish a session."
+    "description": "Session-cookie based Mobile API for TexaPay. Set baseUrl environment variable to your ngrok or local URL.\n\nFolders contain only endpoints consumed by the PWA."
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Ensure idemKey variable is set if missing",
+          "const current = pm.variables.get('idemKey');",
+          "if (!current) {",
+          "  const guid = pm.variables.replaceIn('{{$guid}}');",
+          "  try { pm.environment.set('idemKey', guid); } catch (e) {}",
+          "  try { pm.collectionVariables.set('idemKey', guid); } catch (e) {}",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
-      "name": "Feature",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/feature", "host": ["{{baseUrl}}"], "path": ["api","mobile","feature"] }
-      }
-    },
-    {
-      "name": "Health - PawaPay",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/health/pawapay", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","pawapay"] }
-      }
-    },
-    {
-      "name": "Health - SafeHaven",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven"] }
-      }
-    },
-    {
-      "name": "Health - SafeHaven Banks",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven","banks"] }
-      }
-    },
-    {
-      "name": "Health - OpenExchangeRates",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/health/oxr", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","oxr"] }
-      }
-    },
-    {
-      "name": "Auth - Login (form)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "phone", "value": "{{loginPhone}}" },
-            { "key": "password", "value": "{{loginPassword}}" },
-            { "key": "pin", "value": "4248" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","login"] }
-      }
-    },
-    {
-      "name": "Auth - Register (form)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "name", "value": "Test User" },
-            { "key": "phone", "value": "237650000001" },
-            { "key": "password", "value": "Passw0rd!" },
-            { "key": "pin", "value": "1234" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/auth/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","register"] }
-      }
-    },
-    {
-      "name": "Auth - Logout",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","logout"] }
-      }
-    },
-    {
-      "name": "Banks - List",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks"] }
-      }
-    },
-    {
-      "name": "Banks - Favorites",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/banks/favorites", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","favorites"] }
-      }
-    },
-    {
-      "name": "Banks - Suggest",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Sandbox Bank\"\n}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/banks/suggest", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","suggest"] }
-      }
-    },
-    {
-      "name": "KYC - Start",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/start", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","start"] }
-      }
-    },
-    {
-      "name": "KYC - Get Web Token",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/web-token", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","web-token"] }
-      }
-    },
-    {
-      "name": "KYC - Status",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/kyc/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","status"] }
-      }
-    },
-    {
-      "name": "Transfers - Name Enquiry",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "bankCode", "value": "999240" },
-            { "key": "accountNumber", "value": "0119215210" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/name-enquiry", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","name-enquiry"] }
-      }
-    },
-    {
-      "name": "Transfers - Quote",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "amountXaf", "value": "10000" },
-            { "key": "bankCode", "value": "999240" },
-            { "key": "accountNumber", "value": "0119215210" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/quote", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","quote"] }
-      }
-    },
-    {
-      "name": "Transfers - Confirm",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Requested-With", "value": "XMLHttpRequest" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\\n    \\\"quoteId\\\": \\\"{{quoteId}}\\\",\\n    \\\"quoteRef\\\": \\\"{{quoteRef}}\\\",\\n    \\\"bankCode\\\": \\\"{{bankCode}}\\\",\\n    \\\"accountNumber\\\": \\\"{{accountNumber}}\\\",\\n    \\\"msisdn\\\": \\\"{{msisdn}}\\\",\\n    \\\"pin\\\": \\\"{{pin}}\\\"\\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/confirm", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","confirm"] }
-      }
-    },
-    {
-      "name": "Transfers - Timeline",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/timeline", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","timeline"] }
-      }
-    },
-    {
-      "name": "Transfers - Receipt URL",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt-url"] }
-      }
-    },
-    {
-      "name": "Transfers - Payin Status",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payin/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payin","status"] }
-      }
-    },
-    {
-      "name": "Transfers - Payout",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout"] }
-      }
-    },
-    {
-      "name": "Transfers - Payout Status",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout","status"] }
-      }
-    },
-    {
-      "name": "Transfers - Receipt PDF",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/receipt.pdf", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","receipt.pdf"] }
-      }
-    },
-    {
-      "name": "Transfers - Share URL",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/share-url", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","share-url"] }
-      }
-    },
-    {
-      "name": "Notifications - List",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications"] }
-      }
-    },
-    {
-      "name": "Notifications - Summary",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/summary", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","summary"] }
-      }
-    },
-    {
-      "name": "Notifications - Mark All Read",
-      "request": {
-        "method": "PUT",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","read-all"] }
-      }
-    },
-    {
-      "name": "Devices - Register",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{\n  \"platform\": \"web\",\n  \"token\": \"TEST_TOKEN_ABC\"\n}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/devices/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","register"] }
-      }
-    },
-    {
-      "name": "Devices - List",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/devices", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices"] }
-      }
-    },
-    {
-      "name": "Devices - Test Push",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/devices/test-push", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","test-push"] }
-      }
-    },
-    {
-      "name": "Devices - Unregister",
-      "request": {
-        "method": "DELETE",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/devices/unregister", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","unregister"] }
-      }
-    },
-    {
-      "name": "Dashboard",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/dashboard", "host": ["{{baseUrl}}"], "path": ["api","mobile","dashboard"] }
-      }
-    },
-    {
-      "name": "Transfers - List",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers?page=1&perPage=10", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers"], "query": [
-          {"key":"page","value":"1"}, {"key":"perPage","value":"10"}
-        ] }
-      }
-    },
-    {
-      "name": "Transfers - Show",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}"] }
-      }
-    },
-    {
-      "name": "Pricing - Limits",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/pricing/limits", "host": ["{{baseUrl}}"], "path": ["api","mobile","pricing","limits"] }
-      }
-    },
-    {
-      "name": "Pricing - Preview",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/pricing/rate-preview?amountXaf=10000", "host": ["{{baseUrl}}"], "path": ["api","mobile","pricing","rate-preview"], "query": [
-          {"key":"amountXaf","value":"10000"}
-        ] }
-      }
-    },
-    {
-      "name": "Profile - Show",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile"] }
-      }
+      "name": "Auth",
+      "item": [
+        { "name": "Login", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"phone","value":"{{loginPhone}}"}, {"key":"password","value":"{{loginPassword}}"}, {"key":"pin","value":"4248"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","login"] } } },
+        { "name": "Refresh", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","refresh"] } } },
+        { "name": "Logout", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","logout"] } } },
+        { "name": "Signup - Request", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"phone\": \"{{signupPhone}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/auth/signup/request", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","signup","request"] } } },
+        { "name": "Signup - Verify", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"phone\": \"{{signupPhone}}\",\n  \"code\": \"{{signupCode}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"first_name\": \"{{firstName}}\",\n  \"last_name\": \"{{lastName}}\",\n  \"dob\": \"{{dob}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/auth/signup/verify", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","signup","verify"] } } },
+        { "name": "Password - Forgot (v2)", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"phone\": \"{{resetPhone}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/auth/password/forgot", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","password","forgot"] } } },
+        { "name": "Password - Reset (v2)", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"phone\": \"{{resetPhone}}\",\n  \"code\": \"{{resetCode}}\",\n  \"new_password\": \"{{resetNewPassword}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/auth/password/reset", "host": ["{{baseUrl}}"], "path": ["api","mobile","auth","password","reset"] } } }
+      ]
     },
     {
       "name": "Policies",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/policies", "host": ["{{baseUrl}}"], "path": ["api","mobile","policies"] }
-      }
+      "item": [
+        { "name": "Status", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/policies/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","policies","status"] } } },
+        { "name": "Accept", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/policies/accept", "host": ["{{baseUrl}}"], "path": ["api","mobile","policies","accept"] } } }
+      ]
     },
     {
-      "name": "Support - Help",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/support/help", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","help"] }
-      }
+      "name": "Banks",
+      "item": [
+        { "name": "List", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks"] } } },
+        { "name": "Favorites", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/banks/favorites", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","favorites"] } } },
+        { "name": "Suggest", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"name\": \"{{suggestBankName}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/banks/suggest", "host": ["{{baseUrl}}"], "path": ["api","mobile","banks","suggest"] } } },
+        { "name": "Health - SafeHaven Banks (fallback)", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/health/safehaven/banks", "host": ["{{baseUrl}}"], "path": ["api","mobile","health","safehaven","banks"] } } }
+      ]
     },
     {
-      "name": "Security - Show",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security"] }
-      }
+      "name": "KYC",
+      "item": [
+        { "name": "Status", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/kyc/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","status"] } } },
+        { "name": "Smile ID - Start", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/start", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","start"] } } },
+        { "name": "Smile ID - Web Token", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/kyc/smileid/web-token", "host": ["{{baseUrl}}"], "path": ["api","mobile","kyc","smileid","web-token"] } } }
+      ]
     },
     {
-      "name": "Security - Set/Change PIN",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "currentPin", "value": "" },
-            { "key": "newPin", "value": "1234" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/pin", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","pin"] }
-      }
+      "name": "Transfers",
+      "item": [
+        { "name": "Name Enquiry", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"bankCode","value":"{{bankCode}}"}, {"key":"accountNumber","value":"{{accountNumber}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/name-enquiry", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","name-enquiry"] } } },
+        { "name": "Quote", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"amountXaf","value":"{{amountXaf}}"}, {"key":"bankCode","value":"{{bankCode}}"}, {"key":"accountNumber","value":"{{accountNumber}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/quote", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","quote"] } }, "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [
+          "pm.test('Save quoteId and quoteRef', function () {",
+          "  let data; try { data = pm.response.json(); } catch (e) { data = null }",
+          "  if (data && data.quote) {",
+          "    const q = data.quote;",
+          "    const id = q.id || q.quoteId;",
+          "    const ref = q.ref || q.reference || q.quoteRef;",
+          "    if (id) { try { pm.environment.set('quoteId', id); } catch(e) {} try { pm.collectionVariables.set('quoteId', id); } catch(e) {} }",
+          "    if (ref) { try { pm.environment.set('quoteRef', ref); } catch(e) {} try { pm.collectionVariables.set('quoteRef', ref); } catch(e) {} }",
+          "  }",
+          "});"
+        ] } } ] },
+        { "name": "Confirm", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"}, {"key":"X-Requested-With","value":"XMLHttpRequest"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"raw", "raw": "{\n    \"quoteId\": \"{{quoteId}}\",\n    \"quoteRef\": \"{{quoteRef}}\",\n    \"bankCode\": \"{{bankCode}}\",\n    \"accountNumber\": \"{{accountNumber}}\",\n    \"msisdn\": \"{{msisdn}}\",\n    \"pin\": \"{{pin}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/confirm", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","confirm"] } } },
+        { "name": "Timeline", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/timeline", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","timeline"] } } },
+        { "name": "Payin Status", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payin/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payin","status"] } } },
+        { "name": "Payout", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout"] } } },
+        { "name": "Payout Status", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}/payout/status", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}","payout","status"] } } },
+        { "name": "List", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/transfers?page=1&perPage=10", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers"], "query": [ {"key":"page","value":"1"}, {"key":"perPage","value":"10"} ] } } },
+        { "name": "Show", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/transfers/{{transferId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","transfers","{{transferId}}"] } } }
+      ]
     },
     {
-      "name": "Security - Change Password",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "currentPassword", "value": "Passw0rd!" },
-            { "key": "newPassword", "value": "NewPassw0rd!" }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/password", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","password"] }
-      }
+      "name": "Pricing",
+      "item": [
+        { "name": "Preview", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/pricing/rate-preview?amountXaf=10000", "host": ["{{baseUrl}}"], "path": ["api","mobile","pricing","rate-preview"], "query": [ {"key":"amountXaf","value":"10000"} ] } } }
+      ]
     },
     {
-      "name": "Notifications - Get",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","notifications"] }
-      }
+      "name": "Transactions",
+      "item": [
+        { "name": "Feed", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/transactions/feed", "host": ["{{baseUrl}}"], "path": ["api","mobile","transactions","feed"] } } }
+      ]
     },
     {
-      "name": "Notifications - Update",
-      "request": {
-        "method": "PUT",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": { "mode": "raw", "raw": "{\n  \"email\": { \"transfers\": true, \"promos\": true },\n  \"sms\": { \"alerts\": false },\n  \"push\": { \"alerts\": true }\n}" },
-        "url": { "raw": "{{baseUrl}}/api/mobile/profile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","notifications"] }
-      }
+      "name": "Notifications",
+      "item": [
+        { "name": "List", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/notifications", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications"] } } },
+        { "name": "Summary", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/notifications/summary", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","summary"] } } },
+        { "name": "Mark All Read", "request": { "method": "PUT", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","read-all"] } } },
+        { "name": "Mark Read (single)", "request": { "method": "PUT", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/notifications/{{notificationId}}/read", "host": ["{{baseUrl}}"], "path": ["api","mobile","notifications","{{notificationId}}","read"] } } }
+      ]
     },
     {
-      "name": "Support - Contact",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "subject", "value": "App Issue" },
-            { "key": "message", "value": "I need help with a transfer." }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/support/contact", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","contact"] }
-      }
+      "name": "Devices",
+      "item": [
+        { "name": "Register", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw": "{\n  \"platform\": \"{{devicePlatform}}\",\n  \"token\": \"{{pushToken}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/devices/register", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","register"] } } },
+        { "name": "List", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/devices", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices"] } } },
+        { "name": "Test Push", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/devices/test-push", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","test-push"] } } },
+        { "name": "Unregister", "request": { "method": "DELETE", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/devices/unregister", "host": ["{{baseUrl}}"], "path": ["api","mobile","devices","unregister"] } } }
+      ]
     },
     {
-      "name": "Support - Tickets",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets"] }
-      }
+      "name": "Profile",
+      "item": [
+        { "name": "Show", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/profile", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile"] } } },
+        { "name": "Personal Info (GET)", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/profile/personal-info", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","personal-info"] } } },
+        { "name": "Personal Info (POST)", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{\n  \"first_name\": \"{{firstName}}\",\n  \"last_name\": \"{{lastName}}\",\n  \"email\": \"{{email}}\"\n}" }, "url": { "raw": "{{baseUrl}}/api/mobile/profile/personal-info", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","personal-info"] } } },
+        { "name": "Security - Show", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/profile/security", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security"] } } },
+        { "name": "Security - Set/Change PIN", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"currentPin","value":"{{currentPin}}"}, {"key":"newPin","value":"{{newPin}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/pin", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","pin"] } } },
+        { "name": "Security - Change Password", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"currentPassword","value":"{{currentPassword}}"}, {"key":"newPassword","value":"{{newPassword}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/password", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","password"] } } },
+        { "name": "Security - Toggles", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/profile/security/toggles", "host": ["{{baseUrl}}"], "path": ["api","mobile","profile","security","toggles"] } } },
+        { "name": "Account - Delete", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/json"} ], "body": { "mode":"raw", "raw":"{}" }, "url": { "raw": "{{baseUrl}}/api/mobile/account/delete", "host": ["{{baseUrl}}"], "path": ["api","mobile","account","delete"] } } }
+      ]
     },
     {
-      "name": "Support - Show",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Accept", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}"] }
-      }
+      "name": "Support",
+      "item": [
+        { "name": "Help", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/support/help", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","help"] } } },
+        { "name": "Contact", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"subject","value":"{{supportSubject}}"}, {"key":"message","value":"{{supportMessage}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/support/contact", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","contact"] } } },
+        { "name": "Tickets", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets"] } } },
+        { "name": "Show", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}"] } } },
+        { "name": "Reply", "request": { "method": "POST", "header": [ {"key":"Accept","value":"application/json"}, {"key":"Content-Type","value":"application/x-www-form-urlencoded"}, {"key":"Idempotency-Key","value":"{{idemKey}}"} ], "body": { "mode":"urlencoded", "urlencoded": [ {"key":"message","value":"{{supportReply}}"} ] }, "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}/reply", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}","reply"] } } }
+      ]
     },
     {
-      "name": "Support - Reply",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Accept", "value": "application/json" },
-          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" },
-          { "key": "Idempotency-Key", "value": "{{idemKey}}" }
-        ],
-        "body": {
-          "mode": "urlencoded",
-          "urlencoded": [
-            { "key": "message", "value": "Thanks for the quick response." }
-          ]
-        },
-        "url": { "raw": "{{baseUrl}}/api/mobile/support/tickets/{{ticketId}}/reply", "host": ["{{baseUrl}}"], "path": ["api","mobile","support","tickets","{{ticketId}}","reply"] }
-      }
+      "name": "Misc",
+      "item": [
+        { "name": "Dashboard", "request": { "method": "GET", "header": [ {"key":"Accept","value":"application/json"} ], "url": { "raw": "{{baseUrl}}/api/mobile/dashboard", "host": ["{{baseUrl}}"], "path": ["api","mobile","dashboard"] } } }
+      ]
     }
   ],
   "variable": [
@@ -542,10 +150,33 @@
     { "key": "quoteRef", "value": "" },
     { "key": "bankCode", "value": "999240" },
     { "key": "accountNumber", "value": "0119215210" },
+    { "key": "amountXaf", "value": "10000" },
     { "key": "msisdn", "value": "237693456789" },
     { "key": "pin", "value": "1234" },
     { "key": "transferId", "value": "" },
     { "key": "loginPhone", "value": "237674226623" },
-    { "key": "loginPassword", "value": "Ayuk.texa1" }
+    { "key": "loginPassword", "value": "Passw0rd!" },
+    { "key": "suggestBankName", "value": "New Sandbox Bank" },
+    { "key": "devicePlatform", "value": "web" },
+    { "key": "pushToken", "value": "TEST_TOKEN_ABC" },
+    { "key": "notificationId", "value": "" },
+    { "key": "ticketId", "value": "" },
+    { "key": "signupPhone", "value": "+237650000001" },
+    { "key": "signupCode", "value": "123456" },
+    { "key": "signupPassword", "value": "Passw0rd!" },
+    { "key": "firstName", "value": "Test" },
+    { "key": "lastName", "value": "User" },
+    { "key": "dob", "value": "1990-01-01" },
+    { "key": "resetPhone", "value": "+237650000001" },
+    { "key": "resetCode", "value": "654321" },
+    { "key": "resetNewPassword", "value": "NewPassw0rd!" },
+    { "key": "currentPin", "value": "" },
+    { "key": "newPin", "value": "1234" },
+    { "key": "currentPassword", "value": "Passw0rd!" },
+    { "key": "newPassword", "value": "NewPassw0rd!" },
+    { "key": "email", "value": "user@example.com" },
+    { "key": "supportSubject", "value": "App Issue" },
+    { "key": "supportMessage", "value": "I need help with a transfer." },
+    { "key": "supportReply", "value": "Thanks for the quick response." }
   ]
 }

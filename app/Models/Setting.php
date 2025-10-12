@@ -19,4 +19,21 @@ class Setting extends Model
     protected $casts = [
         'enabled' => 'boolean',
     ];
+
+    public function getProviderVendorAttribute(): ?string
+    {
+        if (($this->group ?? null) !== 'providers') {
+            return null;
+        }
+
+        $key = (string) ($this->key ?? '');
+        $prefix = strtolower(strtok($key, '.')) ?: '';
+
+        return match ($prefix) {
+            'pawapay'   => 'PawaPay',
+            'safehaven' => 'SafeHaven',
+            'oxr'       => 'Open Exchange Rates',
+            default     => ucfirst($prefix ?: 'Other Provider'),
+        };
+    }
 }

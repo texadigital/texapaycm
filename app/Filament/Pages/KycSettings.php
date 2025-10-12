@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\AdminSetting;
+use App\Support\AdminActivity;
 use BackedEnum;
 use Filament\Forms;
 use Filament\Forms\Components\TextInput;
@@ -19,6 +20,8 @@ class KycSettings extends Page implements HasForms
     use InteractsWithForms;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
+    protected static string|\UnitEnum|null $navigationGroup = 'Limits & Risk';
+    protected static ?int $navigationSort = 506;
 
     protected string $view = 'filament.pages.kyc-settings';
 
@@ -63,6 +66,14 @@ class KycSettings extends Page implements HasForms
         AdminSetting::setValue('kyc.level1.daily_cap_xaf', (int) $data['level1_daily'], 'integer', 'Level 1 daily cap (XAF)', 'kyc');
         AdminSetting::setValue('kyc.level1.monthly_cap_xaf', (int) $data['level1_monthly'], 'integer', 'Level 1 monthly cap (XAF)', 'kyc');
 
+        // Audit log for KYC settings update
+        try {
+            AdminActivity::log('kyc.settings.updated', null, [], [], [
+                'data' => $data,
+            ]);
+        } catch (\Throwable $e) { /* non-blocking */ }
+
         Notification::make()->title('KYC settings saved')->success()->send();
     }
 }
+

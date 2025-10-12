@@ -22,6 +22,7 @@ use App\Filament\Widgets\TodaysVolumeWidget;
 use App\Filament\Widgets\NearLimitUsersWidget;
 use App\Filament\Widgets\RecentCriticalUtilizationWidget;
 use App\Http\Middleware\EnsureAdmin;
+use App\Filament\Widgets\SystemHealthWidget;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -47,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
                 TodaysVolumeWidget::class,
                 NearLimitUsersWidget::class,
                 RecentCriticalUtilizationWidget::class,
+                SystemHealthWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

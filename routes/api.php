@@ -83,14 +83,6 @@ Route::middleware([
         return response()->json($rates);
     })->name('api.mobile.health.oxr');
 
-        // Public password reset endpoints (v1 kept), v2 adds OTP-based with tighter throttling
-        Route::post('/auth/forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'apiSendResetCode'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->name('api.mobile.auth.forgot_password');
-        Route::post('/auth/reset-password', [\App\Http\Controllers\PasswordResetController::class, 'apiResetPassword'])
-            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->name('api.mobile.auth.reset_password');
-
         // Password reset v2 (neutral, OTP-based)
         Route::post('/auth/password/forgot', [\App\Http\Controllers\Auth\PasswordResetV2Controller::class, 'forgot'])
             ->middleware(['throttle:reset-init'])
@@ -114,6 +106,7 @@ Route::middleware([
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.kyc.smileid.web_token');
         Route::get('/kyc/status', [\App\Http\Controllers\Kyc\KycController::class, 'status'])->name('api.mobile.kyc.status');
+        Route::get('/kyc/edd', [\App\Http\Controllers\Kyc\SmileIdController::class, 'edd'])->name('api.mobile.kyc.edd');
 
         // Transfers JSON orchestration
         Route::get('/transfers', [\App\Http\Controllers\Api\TransfersController::class, 'index'])->name('api.mobile.transfers.index');
@@ -126,11 +119,11 @@ Route::middleware([
             ->name('api.mobile.transfers.name_enquiry');
         Route::post('/transfers/quote', [\App\Http\Controllers\Api\TransfersController::class, 'quote'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->middleware(['throttle:20,1', 'check.limits'])
+            ->middleware(['throttle:20,1', 'check.limits', 'check.aml'])
             ->name('api.mobile.transfers.quote');
         Route::post('/transfers/confirm', [\App\Http\Controllers\Api\TransfersController::class, 'confirm'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
-            ->middleware(['throttle:20,1', 'check.limits'])
+            ->middleware(['throttle:20,1', 'check.limits', 'check.aml'])
             ->name('api.mobile.transfers.confirm');
         Route::post('/transfers/{transfer}/payin/status', [\App\Http\Controllers\Api\TransfersController::class, 'payinStatus'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
@@ -148,6 +141,26 @@ Route::middleware([
         Route::post('/transfers/{transfer}/share-url', [\App\Http\Controllers\Api\TransfersController::class, 'shareLink'])
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.transfers.share_url');
+
+        // Protected (escrow-style) endpoints (feature-flagged in controller)
+        Route::post('/protected/init', [\App\Http\Controllers\Api\ProtectedController::class, 'init'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.init');
+        Route::get('/protected/{ref}', [\App\Http\Controllers\Api\ProtectedController::class, 'show'])
+            ->name('api.mobile.protected.show');
+        Route::post('/protected/{ref}/approve', [\App\Http\Controllers\Api\ProtectedController::class, 'approve'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.approve');
+        Route::post('/protected/{ref}/dispute', [\App\Http\Controllers\Api\ProtectedController::class, 'dispute'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.dispute');
+        Route::post('/protected/{ref}/request-release', [\App\Http\Controllers\Api\ProtectedController::class, 'requestRelease'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.request_release');
 
         // Pricing & Limits
         Route::get('/pricing/limits', [\App\Http\Controllers\Api\PricingController::class, 'limits'])->name('api.mobile.pricing.limits');

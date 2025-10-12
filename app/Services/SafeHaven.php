@@ -37,6 +37,145 @@ class SafeHaven
     }
 
     /**
+     * Create a time-bound Virtual Account for a single transaction.
+     * Input expects keys: validFor (int seconds, default 900), callbackUrl (https), amountControl (Fixed|UnderPayment|OverPayment), amount (NGN int), externalReference (unique ref)
+     * Returns: ['success'=>bool, 'id'=>string|null, 'bank_code'=>string|null, 'account_number'=>string|null, 'reference'=>string|null, 'raw'=>array]
+     */
+    public function createVirtualAccount(array $payload): array
+    {
+        if (!$this->baseUrl) {
+            return ['success' => false, 'id' => null, 'bank_code' => null, 'account_number' => null, 'reference' => null, 'raw' => ['error' => 'Missing SAFEHAVEN_BASE_URL or credentials']];
+        }
+        try {
+            $body = [];
+            if (isset($payload['validFor'])) { $body['validFor'] = (int) $payload['validFor']; }
+            if (!empty($payload['callbackUrl'])) { $body['callbackUrl'] = (string) $payload['callbackUrl']; }
+            if (!empty($payload['externalReference'])) { $body['externalReference'] = (string) $payload['externalReference']; }
+            if (!empty($payload['settlementAccount']) && is_array($payload['settlementAccount'])) {
+                $body['settlementAccount'] = $payload['settlementAccount'];
+            } else {
+                // Default from env if required by provider
+                $settleBank = env('SAFEHAVEN_SETTLEMENT_BANK_CODE', '090286');
+                $settleAcct = env('SAFEHAVEN_DEBIT_ACCOUNT_NUMBER');
+                if (!empty($settleAcct)) {
+                    $body['settlementAccount'] = [
+                        'bankCode' => $settleBank,
+                        'accountNumber' => $settleAcct,
+                    ];
+                }
+            }
+            // Amount control group
+            if (!empty($payload['amountControl'])) { $body['amountControl'] = (string) $payload['amountControl']; }
+            if (isset($payload['amount'])) { $body['amount'] = (int) $payload['amount']; }
+
+            $resp = $this->client()->post($this->baseUrl . '/virtual-accounts', $body);
+            $json = $resp->json();
+            $status = $resp->status();
+            $ok = $resp->successful() || (($json['status'] ?? null) == 200);
+            // Try common shapes
+            $data = $json['data'] ?? $json;
+            $id = $data['_id'] ?? ($data['id'] ?? null);
+            // Try multiple possible keys for account number across tenants
+            $acct = $data['accountNumber']
+                ?? ($data['creditAccountNumber'] ?? null)
+                ?? ($data['destinationAccountNumber'] ?? null)
+                ?? ($data['virtualAccountNumber'] ?? null)
+                ?? ($data['account_no'] ?? null)
+                ?? ($data['account'] ?? null)
+                ?? ($data['account_details']['accountNumber'] ?? null);
+            // Try multiple keys for bank code
+            $bank = $data['bankCode']
+                ?? ($data['destinationInstitutionCode'] ?? null)
+                ?? ($data['destinationBankCode'] ?? null)
+                ?? ($data['bank_code'] ?? null);
+            // Try multiple keys for payment/reference
+            $ref = $data['paymentReference']
+                ?? ($data['externalReference'] ?? null)
+                ?? ($data['reference'] ?? null);
+            return [
+                'success' => (bool) $ok,
+                'id' => $id,
+                'bank_code' => $bank,
+                'account_number' => $acct,
+                'reference' => $ref,
+                'raw' => array_merge($json ?? [], ['http_status' => $status, 'request' => $body]),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'id' => null, 'bank_code' => null, 'account_number' => null, 'reference' => null, 'raw' => ['exception' => $e->getMessage()]];
+        }
+    }
+
+    /**
+     * Get Virtual Account by id
+     */
+    public function getVirtualAccount(string $id): array
+    {
+        if (!$this->baseUrl) { return ['success'=>false, 'raw'=>['error'=>'Missing SAFEHAVEN_BASE_URL or credentials']]; }
+        try {
+            $resp = $this->client()->get($this->baseUrl . '/virtual-accounts/' . urlencode($id));
+            return ['success'=>$resp->successful(), 'raw'=>$resp->json()];
+        } catch (\Throwable $e) {
+            return ['success'=>false, 'raw'=>['exception'=>$e->getMessage()]];
+        }
+    }
+
+    /**
+     * Virtual Account Transfer Status by sessionId
+     */
+    public function virtualAccountTransferStatus(string $sessionId): array
+    {
+        if (!$this->baseUrl) { return ['success'=>false, 'raw'=>['error'=>'Missing SAFEHAVEN_BASE_URL or credentials']]; }
+        try {
+            $resp = $this->client()->post($this->baseUrl . '/virtual-accounts/status', ['sessionId' => $sessionId]);
+            return ['success'=>$resp->successful(), 'raw'=>$resp->json()];
+        } catch (\Throwable $e) {
+            return ['success'=>false, 'raw'=>['exception'=>$e->getMessage()]];
+        }
+    }
+
+    /**
+     * Get Virtual Transactions for account id
+     */
+    public function getVirtualTransactions(string $virtualAccountId): array
+    {
+        if (!$this->baseUrl) { return ['success'=>false, 'raw'=>['error'=>'Missing SAFEHAVEN_BASE_URL or credentials']]; }
+        try {
+            $resp = $this->client()->get($this->baseUrl . '/virtual-accounts/' . urlencode($virtualAccountId) . '/transaction');
+            return ['success'=>$resp->successful(), 'raw'=>$resp->json()];
+        } catch (\Throwable $e) {
+            return ['success'=>false, 'raw'=>['exception'=>$e->getMessage()]];
+        }
+    }
+
+    /**
+     * Update Virtual Account (e.g., callbackUrl)
+     */
+    public function updateVirtualAccount(string $id, array $body): array
+    {
+        if (!$this->baseUrl) { return ['success'=>false, 'raw'=>['error'=>'Missing SAFEHAVEN_BASE_URL or credentials']]; }
+        try {
+            $resp = $this->client()->put($this->baseUrl . '/virtual-accounts/' . urlencode($id), $body);
+            return ['success'=>$resp->successful(), 'raw'=>$resp->json()];
+        } catch (\Throwable $e) {
+            return ['success'=>false, 'raw'=>['exception'=>$e->getMessage()]];
+        }
+    }
+
+    /**
+     * Delete Virtual Account by id
+     */
+    public function deleteVirtualAccount(string $id): array
+    {
+        if (!$this->baseUrl) { return ['success'=>false, 'raw'=>['error'=>'Missing SAFEHAVEN_BASE_URL or credentials']]; }
+        try {
+            $resp = $this->client()->delete($this->baseUrl . '/virtual-accounts/' . urlencode($id));
+            return ['success'=>$resp->successful(), 'raw'=>$resp->json()];
+        } catch (\Throwable $e) {
+            return ['success'=>false, 'raw'=>['exception'=>$e->getMessage()]];
+        }
+    }
+
+    /**
      * Fetch list of Nigerian banks from Safe Haven.
      */
     public function listBanks(): array
@@ -495,6 +634,10 @@ class SafeHaven
                 'narration' => $payload['narration'] ?? null,
                 'paymentReference' => $payload['reference'] ?? null,
             ];
+            // Optional: beneficiaryName (useful for some tenants/sandbox). Only include if provided to avoid 400s.
+            if (!empty($payload['beneficiary_name'])) {
+                $body['beneficiaryName'] = (string) $payload['beneficiary_name'];
+            }
             // Do not include non-documented fields like beneficiaryName to avoid 400s
             $resp = $this->client()->post($this->baseUrl . '/transfers', $body);
 

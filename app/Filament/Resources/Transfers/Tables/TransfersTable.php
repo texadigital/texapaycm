@@ -22,7 +22,8 @@ class TransfersTable
         return $table
             ->columns([
                 TextColumn::make('id')->sortable()->label('ID'),
-                TextColumn::make('user_id')->sortable()->label('User'),
+                TextColumn::make('user.name')->label('User')->searchable(),
+                TextColumn::make('user.email')->label('Email')->searchable()->toggleable(),
                 TextColumn::make('payin_ref')->label('Pay-in Ref')->searchable()->toggleable(),
                 TextColumn::make('payout_ref')->label('Payout Ref')->searchable()->toggleable(),
                 BadgeColumn::make('payin_status')
@@ -47,14 +48,23 @@ class TransfersTable
                         'danger' => 'failed',
                         'success' => 'payin_success',
                     ])->label('Overall'),
-                TextColumn::make('amount_xaf')->label('XAF Amount')->numeric()->sortable(),
-                TextColumn::make('receive_ngn_minor')->label('NGN Minor')->numeric()->sortable()->toggleable(),
+                TextColumn::make('amount_xaf')
+                    ->label('Amount')
+                    ->money('XAF', locale: 'en_CM')
+                    ->sortable(),
+                TextColumn::make('receive_ngn_minor')
+                    ->label('NGN')
+                    ->formatStateUsing(fn ($state) => is_numeric($state) ? number_format($state / 100, 2) : null)
+                    ->suffix(' NGN')
+                    ->alignRight()
+                    ->toggleable()
+                    ->sortable(),
                 TextColumn::make('recipient_bank_name')->label('Bank')->toggleable(),
                 TextColumn::make('recipient_account_number')
                     ->label('Acct #')
                     ->formatStateUsing(fn ($state) => $state ? str_repeat('•', max(strlen($state) - 4, 0)) . substr($state, -4) : null)
                     ->toggleable(),
-                TextColumn::make('created_at')->dateTime()->since()->sortable()->label('Created'),
+                TextColumn::make('created_at')->dateTime('Y-m-d H:i')->since()->sortable()->label('Created'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -92,10 +102,15 @@ class TransfersTable
             ])
             ->recordActions([
                 \Filament\Actions\Action::make('view')
-                    ->label('View')
                     ->icon('heroicon-o-eye')
                     ->url(fn ($record) => \App\Filament\Resources\Transfers\TransferResource::getUrl('view', ['record' => $record])),
                 EditAction::make(),
+            ])
+            ->headerActions([
+                \Filament\Actions\Action::make('export_csv')
+                    ->label('Export CSV')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->url('/admin/exports/transfers.csv', true),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

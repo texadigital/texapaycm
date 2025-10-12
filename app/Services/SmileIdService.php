@@ -41,7 +41,8 @@ class SmileIdService
         $timestamp = $this->nowIso8601Utc();
         $signature = $this->generateSignature($timestamp);
 
-        $callbackUrl = route('kyc.smileid.callback');
+        // Allow sandbox/public override to guarantee Smile can reach our webhook
+        $callbackUrl = (string) (env('SMILE_ID_CALLBACK_URL') ?: route('kyc.smileid.callback'));
         $country = 'CM'; // Cameroon context
 
         // Provide minimal job parameters for client SDK

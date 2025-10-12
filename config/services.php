@@ -42,6 +42,18 @@ return [
         'webhook_base_url' => rtrim(env('APP_URL', 'http://localhost'), '/'),
     ],
 
+    // SafeHaven bank integration
+    'safehaven' => [
+        'webhook_secret' => env('SAFEHAVEN_WEBHOOK_SECRET'),
+        'webhook_base_url' => rtrim(env('SAFEHAVEN_WEBHOOK_BASE_URL', env('APP_URL', 'http://localhost')), '/'),
+    ],
+
+    // Optional: Paystack for card funding (phase 2)
+    'paystack' => [
+        'secret' => env('PAYSTACK_SECRET'),
+        'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
+    ],
+
     'twilio' => [
         'sid' => env('TWILIO_SID'),
         'auth_token' => env('TWILIO_AUTH_TOKEN'),
@@ -52,5 +64,11 @@ return [
         'server_key' => env('FCM_SERVER_KEY'),
         'project_id' => env('FCM_PROJECT_ID'),
         'service_account_path' => env('FCM_SERVICE_ACCOUNT_PATH'),
+    ],
+
+    // Screening provider configuration
+    'screening' => [
+        // driver: internal|smileid (extendable)
+        'driver' => env('SCREENING_DRIVER', 'internal'),
     ],
 ];

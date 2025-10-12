@@ -101,6 +101,26 @@ class ProcessPawaPayDeposit implements ShouldQueue
             'timeline' => $timeline,
         ]);
 
+        // AML: evaluate rules on pay-in success
+        try {
+            $evaluator = app(\App\Services\AmlRuleEvaluator::class);
+            $alerts = $evaluator->evaluateTransfer($transfer->fresh(), 'payin_success');
+            if (!empty($alerts)) {
+                $timeline[] = [
+                    'state' => 'aml_alerts_created',
+                    'at' => now()->toIso8601String(),
+                    'phase' => 'payin_success',
+                    'alert_ids' => $alerts,
+                ];
+                $transfer->update(['timeline' => $timeline]);
+            }
+        } catch (\Throwable $e) {
+            \Log::error('AML evaluation (payin_success) failed', [
+                'transfer_id' => $transfer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         // Send pay-in success notification
         $notificationService->dispatchUserNotification('transfer.payin.success', $transfer->user, [
             'transfer' => $transfer->toArray()
@@ -293,6 +313,26 @@ class ProcessPawaPayDeposit implements ShouldQueue
                     'status' => 'completed',
                     'timeline' => $timeline,
                 ]);
+
+                // AML: evaluate rules on payout success
+                try {
+                    $evaluator = app(\App\Services\AmlRuleEvaluator::class);
+                    $alerts = $evaluator->evaluateTransfer($transfer->fresh(), 'payout_success');
+                    if (!empty($alerts)) {
+                        $timeline[] = [
+                            'state' => 'aml_alerts_created',
+                            'at' => now()->toIso8601String(),
+                            'phase' => 'payout_success',
+                            'alert_ids' => $alerts,
+                        ];
+                        $transfer->update(['timeline' => $timeline]);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::error('AML evaluation (payout_success) failed', [
+                        'transfer_id' => $transfer->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
 
                 // Send payout success notification
                 $notificationService->dispatchUserNotification('transfer.payout.success', $transfer->user, [

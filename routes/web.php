@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Kyc\SmileIdController;
 use App\Http\Controllers\Kyc\KycController;
+use App\Http\Controllers\Exports\AdminExportController;
 
 Route::get('/', function () {
     // If an admin lands on root, send them to Filament admin
@@ -18,10 +19,16 @@ Route::middleware(['auth'])
     ->get('/api/pricing/preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])
     ->name('api.pricing.preview');
 
-// Admin-friendly receipt route (avoid redirect.admins so admins can view receipts)
+// Admin-friendly routes (keep inside auth)
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/transfer/{transfer}/receipt', [\App\Http\Controllers\TransferController::class, 'showReceipt'])
         ->name('admin.transfer.receipt');
+
+    // Admin CSV exports
+    Route::get('/admin/exports/transfers.csv', [AdminExportController::class, 'transfersCsv'])
+        ->name('admin.exports.transfers');
+    Route::get('/admin/exports/daily-summaries.csv', [AdminExportController::class, 'dailySummariesCsv'])
+        ->name('admin.exports.daily_summaries');
 });
 
 Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(function () {
@@ -30,7 +37,7 @@ Route::middleware(['auth','redirect.admins'])->prefix('transfer')->group(functio
 
     Route::get('/quote', [\App\Http\Controllers\TransferController::class, 'showQuoteForm'])->name('transfer.quote');
     Route::post('/quote', [\App\Http\Controllers\TransferController::class, 'createQuote'])
-        ->middleware('check.limits')
+        ->middleware(['check.limits','check.aml'])
         ->name('transfer.quote.create');
     Route::post('/quote/confirm', [\App\Http\Controllers\TransferController::class, 'confirmPayIn'])->name('transfer.confirm');
 
@@ -125,6 +132,10 @@ Route::post('/api/kyc/smileid/callback', [SmileIdController::class, 'callback'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('kyc.smileid.callback');
 
+// KYC: Smile ID health (public, no external requests)
+Route::get('/api/kyc/smileid/health', [SmileIdController::class, 'health'])
+    ->name('kyc.smileid.health');
+
 // Refund webhook (PawaPay sends refund status callbacks here)
 Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\PawaPayRefundWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
@@ -134,6 +145,15 @@ Route::post('/api/v1/webhooks/pawapay/refunds', [\App\Http\Controllers\Webhooks\
 Route::post('/api/v1/webhooks/pawapay/payouts', [\App\Http\Controllers\Webhooks\PawaPayPayoutWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.payouts');
+
+// SafeHaven: VA credits webhook for Protected (HMAC disabled due to provider not signing)
+Route::post('/webhooks/safehaven/va-credits', [\App\Http\Controllers\Webhooks\SafeHavenProtectedWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// SafeHaven webhook health (GET) for human/browser checks
+Route::get('/webhooks/safehaven/va-credits', function () {
+    return response()->json(['ok' => true, 'service' => 'safehaven_va_credits']);
+});
 
 // Public static pages
 Route::get('/policies', function () {
@@ -145,6 +165,11 @@ Route::post('/api/v1/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::post('/api/v2/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// Admin: Protected resolve endpoint (accept GET for Filament redirect and POST for API use)
+Route::match(['GET','POST'], '/api/admin/protected/{id}/resolve', [\App\Http\Controllers\Admin\ProtectedAdminController::class, 'resolve'])
+    ->middleware(['auth'])
+    ->name('api.admin.protected.resolve');
 
 // Health checks
 Route::get('/health/safehaven', function (\App\Services\SafeHaven $safeHaven) {

@@ -35,6 +35,32 @@ export default function KycPage() {
       const res = await http.post("/api/mobile/kyc/smileid/web-token");
       return res.data as WebTokenRes;
     },
+    onSuccess: (data: any) => {
+      // If backend returns a direct token+url, prefer that
+      if (data?.url) {
+        window.open(data.url, "_blank");
+        return;
+      }
+      // Fallback: construct a Smile Web URL from the session payload
+      const session = data?.session || data;
+      if (session?.smile_client_id && session?.timestamp && session?.signature) {
+        const params = new URLSearchParams({
+          client_id: String(session.smile_client_id ?? ""),
+          timestamp: String(session.timestamp ?? ""),
+          signature: String(session.signature ?? ""),
+          callback_url: String(session.callback_url ?? ""),
+          user_id: String(session.partner_params?.user_id ?? ""),
+          job_id: String(session.partner_params?.job_id ?? ""),
+          job_type: String(session.partner_params?.job_type ?? "6"),
+          country: String(session.country ?? "CM"),
+          source_sdk: String(session.source_sdk ?? "web"),
+          source_sdk_version: String(session.source_sdk_version ?? "1.0.0"),
+        });
+        const base = process.env.NEXT_PUBLIC_SMILE_WEB_BASE_URL || "https://web.smileidentity.com";
+        const url = `${base}?${params.toString()}`;
+        window.open(url, "_blank");
+      }
+    },
   });
 
   const status = data?.kyc_status || data?.status || "—";
