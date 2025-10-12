@@ -142,6 +142,26 @@ Route::middleware([
             ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
             ->name('api.mobile.transfers.share_url');
 
+        // Protected (escrow-style) endpoints (feature-flagged in controller)
+        Route::post('/protected/init', [\App\Http\Controllers\Api\ProtectedController::class, 'init'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.init');
+        Route::get('/protected/{ref}', [\App\Http\Controllers\Api\ProtectedController::class, 'show'])
+            ->name('api.mobile.protected.show');
+        Route::post('/protected/{ref}/approve', [\App\Http\Controllers\Api\ProtectedController::class, 'approve'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.approve');
+        Route::post('/protected/{ref}/dispute', [\App\Http\Controllers\Api\ProtectedController::class, 'dispute'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.dispute');
+        Route::post('/protected/{ref}/request-release', [\App\Http\Controllers\Api\ProtectedController::class, 'requestRelease'])
+            ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
+            ->middleware(['throttle:20,1'])
+            ->name('api.mobile.protected.request_release');
+
         // Pricing & Limits
         Route::get('/pricing/limits', [\App\Http\Controllers\Api\PricingController::class, 'limits'])->name('api.mobile.pricing.limits');
         Route::get('/pricing/rate-preview', [\App\Http\Controllers\Api\PricingController::class, 'preview'])->name('api.mobile.pricing.preview');

@@ -581,3 +581,470 @@ Updated over 3 years ago
 Transfer Status
 Identity and Credit Check
 
+
+
+
+Webhooks
+If you enable webhook notifications and set an webhook url, Safe Haven will send webhook events to notify updates, transfers, transactions.
+
+
+Webhook Type
+
+transfer is sent as the webhook type when a transfer is made.
+
+
+Webhook Object
+
+Webhook object
+
+{
+  "type": "transfer",
+  "data": {
+    "_id": "616f6ad6d5c1fb4ba1f00076",
+    "client": "61fbc386dab3430a31406018",
+    "account": "613bdab34c38b5140663001f",
+    "type": "Inwards",
+    "sessionId": "000004211020011401570815591371",
+    "nameEnquiryReference": "000004211020011401345232274414",
+    "paymentReference": "000004211020011401570815591371",
+    "mandateReference": null,
+    "isReversed": false,
+    "reversalReference": null,
+    "provider": "NIBSS",
+    "providerChannel": "NIP",
+    "providerChannelCode": "3",
+    "destinationInstitutionCode": "090286",
+    "creditAccountName": "JOHN DOE",
+    "creditAccountNumber": "1234567890",
+    "creditBankVerificationNumber": null,
+    "creditKYCLevel": "3",
+    "debitAccountName": "ACME LTD",
+    "debitAccountNumber": "0987654321",
+    "debitBankVerificationNumber": null,
+    "debitKYCLevel": "1",
+    "transactionLocation": "",
+    "narration": "MOB2/UTO/To JOHN DOE/Test Notification",
+    "amount": 100,
+    "fees": 0,
+    "vat": 0,
+    "stampDuty": 0,
+    "responseCode": "00",
+    "responseMessage": "Approved or completed successfully",
+    "status": "Completed",
+    "isDeleted": false,
+    "createdAt": "2021-10-20T01:14:04.054Z",
+    "updatedAt": "2021-10-20T01:15:10.954Z",
+    "__v": 0,
+    "approvedAt": "2021-10-20T01:15:10.954Z"
+  }
+}
+Webook for Transfer to Virtual Account
+
+JSON
+
+{
+    "type": "virtualAccount.transfer",
+    "data": {
+        "_id": "65b76ed3c0a4440024e45e75",
+        "client": "61e5a83ac6f0ec001ee90fac",
+        "virtualAccount": "65b76ebbc0a4440024e45e52",
+        "sessionId": "999240240129092434550231308787",
+        "nameEnquiryReference": "999240240129092425585215261320",
+        "paymentReference": "999240240129092434550231308787",
+        "isReversed": false,
+        "reversalReference": "",
+        "provider": "BANK",
+        "providerChannel": "TRANSFER",
+        "providerChannelCode": "IBS",
+        "destinationInstitutionCode": "999240",
+        "creditAccountName": "BITAKOTECHNOLOG / OmaTech",
+        "creditAccountNumber": "8060376145",
+        "creditBankVerificationNumber": null,
+        "creditKYCLevel": "3",
+        "debitAccountName": "ZEALVEND",
+        "debitAccountNumber": "0119536306",
+        "debitBankVerificationNumber": null,
+        "debitKYCLevel": "3",
+        "transactionLocation": "9.0932,7.4429",
+        "narration": "",
+        "amount": 1001,
+        "fees": 5,
+        "vat": 0,
+        "stampDuty": 0,
+        "responseCode": "00",
+        "responseMessage": "Approved or completed successfully",
+        "status": "Completed",
+        "isDeleted": false,
+        "createdAt": "2024-01-29T09:24:35.910Z",
+        "declinedAt": "2024-01-29T09:24:35.910Z",
+        "updatedAt": "2024-01-29T09:24:37.994Z",
+
+
+        Virtual Accounts
+If you're new to working with this API and need to create virtual accounts, here's a quick guide to get you started. This part of the documentation focuses primarily on time-based accounts, which are designed to expire after a certain period. These time-based accounts are particularly useful for situations that involve temporary access, such as facilitating one-time payment processes or handling access during a payment checkout.
+
+For creating virtual accounts that do not expire, you'll want to look into the "Sub Accounts" section under the "Accounts" category.
+
+Create Virtual Account
+post
+https://api.sandbox.safehavenmfb.com/virtual-accounts
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+validFor
+int32
+Defaults to 900
+Account validity time in seconds. Default 900 = 15 Mins
+
+900
+callbackUrl
+string
+required
+An endpoint to receive payment webhook notifications. Must start with https://
+
+settlementAccount
+object
+Settlement account details
+
+
+settlementAccount object
+amountControl
+string
+enum
+required
+This is required if the account is only valid for a specified time.
+
+
+Fixed
+Allowed:
+
+Fixed
+
+UnderPayment
+
+OverPayment
+amount
+int32
+required
+This is required if the account is valid for a specified time.
+
+externalReference
+string
+Unique per account. This will be returned on the transfer object
+
+Headers
+ClientID
+string
+required
+This is your 'ibs_client_id' returned in the response when you generate an api token
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated about 1 year ago
+
+Virtual Accounts
+Get Virtual Account
+
+
+Get Virtual Account
+get
+https://api.sandbox.safehavenmfb.com/virtual-accounts/{id}
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+The _id of the account to fetch.
+
+Headers
+ClientID
+string
+required
+This is your 'ibs_client_id' returned in the response when you generate an api token
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated about 1 year ago
+
+Create Virtual Account
+Virtual Account Transfer Status
+
+
+Virtual Account Transfer Status
+post
+https://api.sandbox.safehavenmfb.com/virtual-accounts/status
+The sessionId of the transfer.
+
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Body Params
+sessionId
+string
+required
+Headers
+ClientID
+string
+required
+This is your 'ibs_client_id' returned in the response when you generate an api token
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated over 1 year ago
+
+Get Virtual Account
+Get Virtual Transaction
+Did this page help you?
+
+
+Get Virtual Transaction
+get
+https://api.sandbox.safehavenmfb.com/virtual-accounts/{virtualAccountId}/transaction
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+virtualAccountId
+string
+required
+_id of the virtual account
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated over 1 year ago
+
+Virtual Account Transfer Status
+Update Virtual Account
+Did this page help you?
+
+
+Update Virtual Account
+put
+https://api.sandbox.safehavenmfb.com/virtual-accounts/{id}
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+The _id of the account to update.
+
+Body Params
+callbackUrl
+string
+An endpoint to receive payment webhook notifications. Must start with https://
+
+Headers
+ClientID
+string
+required
+This is your 'ibs_client_id' returned in the response when you generate an api token
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated about 1 year ago
+
+Get Virtual Transaction
+Delete Virtual Account
+Did this page help you?
+
+
+Delete Virtual Account
+delete
+https://api.sandbox.safehavenmfb.com/virtual-accounts/{id}
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+id
+string
+required
+The _id of the account to delete.
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated over 3 years ago
+
+Update Virtual Account
+Checkout.js
+
+
+Checkout.js
+To accept payments online using the SafeHaven Checkout, add the SafeHaven Checkout JS script to your HTML page and configure the checkout as in the examples below.
+
+Example 1 - With Redirect URL
+
+index.html
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>SafeHaven Checkout Demo</title>
+  </head>
+  <body>
+    <h1>Checkout Demo</h1>
+    <button onclick="payWithSafeHaven()">Click Me!</button>
+    
+    <script src="https://checkout.safehavenmfb.com/assets/checkout.min.js"></script>
+    <script type="text/javascript">
+    	let payWithSafeHaven = () => {
+            let checkOut = SafeHavenCheckout({
+                environment: "production", //sandbox || production
+                clientId: "{{ OAuth2 ClientID }}",
+                referenceCode: ''+Math.floor((Math.random() * 1000000000) + 1),
+                customer: {
+                    firstName: "John",
+                    lastName: "Doe",
+                    emailAddress: "johndoe@example.com",
+                    phoneNumber: "+2348032273616"
+                },
+                currency: "NGN", // Must be NGN
+                amount: 100,
+  	            //feeBearer: "account", // account = We charge you, customer = We charge the customer
+                settlementAccount: {
+                    bankCode: "090286", // 999240 = Sandbox || 090286 = Production
+                    accountNumber: "{{ 10 Digits SafeHaven Account Number }}"
+                },
+                redirectUrl: "https://example.com/redirect",
+	              //webhookUrl: "",
+                //customIconUrl: "https://safehavenmfb.com/assets/images/logo1.svg",
+              	//metadata: { "foo": "bar" }
+            });
+        }
+    </script>
+  </body>
+</html>
+Example 2 - With Callback Function
+
+index.html
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>SafeHaven Checkout Demo</title>
+  </head>
+  <body>
+    <h1>Checkout Demo</h1>
+    <button onclick="payWithSafeHaven()">Click Me!</button>
+    
+    <script src="https://checkout.safehavenmfb.com/assets/checkout.min.js"></script>
+    <script type="text/javascript">
+    	let payWithSafeHaven = () => {
+            let checkOut = SafeHavenCheckout({
+                environment: "production", //sandbox || production
+                clientId: "{{ OAuth2 ClientID }}",
+                referenceCode: ''+Math.floor((Math.random() * 1000000000) + 1),
+                customer: {
+                    firstName: "John",
+                    lastName: "Doe",
+                    emailAddress: "johndoe@example.com",
+                    phoneNumber: "+2348032273616"
+                },
+                currency: "NGN", // Must be NGN
+                amount: 100,
+  	            //feeBearer: "account", // account = We charge you, customer = We charge the customer
+                settlementAccount: {
+                    bankCode: "090286", // 999240 = Sandbox || 090286 = Production
+                    accountNumber: "{{ 10 Digits SafeHaven Account Number }}"
+                },
+	              //webhookUrl: "",
+                //customIconUrl: "https://safehavenmfb.com/assets/images/logo1.svg",
+              	//metadata: { "foo": "bar" },
+              	onClose: () => { console.log("Checkout Closed") },
+              	callback: (response) => { console.log(response) }
+            });
+        }
+    </script>
+  </body>
+</html>
+📘
+
+
+Verify Checkout Transaction
+get
+https://api.sandbox.safehavenmfb.com/checkout/{referenceCode}/verify
+Log in to see full request history
+time	status	user agent	
+Make a request to see history.
+0 Requests This Month
+
+Path Params
+referenceCode
+string
+required
+Checkout referenceCode from Checkout.js
+
+Responses
+
+200
+200
+
+
+400
+400
+
+Updated over 3 years ago
+
+Checkout.js
+VAS Transactions
+
+
+

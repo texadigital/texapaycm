@@ -172,6 +172,103 @@ paths:
       responses:
         '200':
           description: OK
+  # Protected (Escrow)
+  /api/mobile/protected/init:
+    post:
+      summary: Start a protected (escrow) transaction and issue a Virtual Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProtectedInitRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtectedInitResponse'
+  /api/mobile/protected/{ref}:
+    get:
+      summary: Get protected transaction summary and timeline
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtectedSummaryResponse'
+  /api/mobile/protected/{ref}/approve:
+    post:
+      summary: Approve release of escrowed funds (buyer only)
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  payout:
+                    type: object
+                    properties:
+                      status: { type: string }
+                      payoutRef: { type: string }
+  /api/mobile/protected/{ref}/dispute:
+    post:
+      summary: Open a dispute to keep funds on hold (buyer only)
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+                details: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  state: { type: string }
+  /api/mobile/protected/{ref}/request-release:
+    post:
+      summary: Request buyer to approve release (nudge notification)
+      parameters:
+        - in: path
+          name: ref
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BasicSuccess'
   /api/mobile/kyc/smileid/start:
     post:
       summary: Start Smile ID KYC session
@@ -876,6 +973,52 @@ paths:
         '200': { description: OK }
   components:
   schemas:
+    ProtectedInitRequest:
+      type: object
+      required: [receiver, amountNgnMinor]
+      properties:
+        receiver:
+          type: object
+          required: [bankCode, accountNumber]
+          properties:
+            bankCode: { type: string }
+            accountNumber: { type: string }
+        amountNgnMinor: { type: integer }
+        note: { type: string, nullable: true }
+    ProtectedInitResponse:
+      type: object
+      properties:
+        ref: { type: string }
+        escrowState: { type: string, enum: [created, awaiting_approval, released, disputed] }
+        funding:
+          type: object
+          properties:
+            va:
+              type: object
+              properties:
+                bankCode: { type: string }
+                accountNumber: { type: string }
+                reference: { type: string }
+        autoReleaseAt: { type: string, format: date-time, nullable: true }
+    ProtectedSummaryResponse:
+      type: object
+      properties:
+        transaction:
+          type: object
+          properties:
+            funding_ref: { type: string }
+            escrow_state: { type: string }
+            amount_ngn_minor: { type: integer }
+            fee_ngn_minor: { type: integer, nullable: true }
+            receiver_bank_code: { type: string }
+            receiver_bank_name: { type: string, nullable: true }
+            receiver_account_number: { type: string }
+            receiver_account_name: { type: string, nullable: true }
+            auto_release_at: { type: string, format: date-time, nullable: true }
+            payout_status: { type: string, nullable: true }
+        timeline:
+          type: array
+          items: { type: object }
     SuggestBankRequest:
       type: object
       properties:

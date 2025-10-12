@@ -146,6 +146,15 @@ Route::post('/api/v1/webhooks/pawapay/payouts', [\App\Http\Controllers\Webhooks\
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.pawapay.payouts');
 
+// SafeHaven: VA credits webhook for Protected (HMAC disabled due to provider not signing)
+Route::post('/webhooks/safehaven/va-credits', [\App\Http\Controllers\Webhooks\SafeHavenProtectedWebhookController::class, '__invoke'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// SafeHaven webhook health (GET) for human/browser checks
+Route::get('/webhooks/safehaven/va-credits', function () {
+    return response()->json(['ok' => true, 'service' => 'safehaven_va_credits']);
+});
+
 // Public static pages
 Route::get('/policies', function () {
     return view('static.policies');
@@ -156,6 +165,11 @@ Route::post('/api/v1/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 Route::post('/api/v2/webhooks/pawapay/deposits', [\App\Http\Controllers\Webhooks\PawaPayWebhookController::class, '__invoke'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// Admin: Protected resolve endpoint (accept GET for Filament redirect and POST for API use)
+Route::match(['GET','POST'], '/api/admin/protected/{id}/resolve', [\App\Http\Controllers\Admin\ProtectedAdminController::class, 'resolve'])
+    ->middleware(['auth'])
+    ->name('api.admin.protected.resolve');
 
 // Health checks
 Route::get('/health/safehaven', function (\App\Services\SafeHaven $safeHaven) {

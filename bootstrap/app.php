@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'idempotency' => \App\Http\Middleware\EnforceIdempotency::class,
             'auth.jwt' => \App\Http\Middleware\RequireAccessToken::class,
             'check.aml' => \App\Http\Middleware\CheckAml::class,
+            'verify.hmac' => \App\Http\Middleware\VerifyProviderHmac::class,
 
         ]);
 
