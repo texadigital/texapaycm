@@ -180,7 +180,7 @@ class AdminSettingsSeeder extends Seeder
             // Pricing v2 Settings (feature-flagged)
             [
                 'setting_key' => 'pricing_v2.enabled',
-                'setting_value' => '0',
+                'setting_value' => '1',
                 'setting_type' => 'boolean',
                 'description' => 'Enable Pricing Model v2 (transparent FX + minimal fees)',
                 'category' => 'pricing',
@@ -189,7 +189,7 @@ class AdminSettingsSeeder extends Seeder
             ],
             [
                 'setting_key' => 'pricing.min_free_transfer_threshold_xaf',
-                'setting_value' => '50000',
+                'setting_value' => '10000000',
                 'setting_type' => 'integer',
                 'description' => 'Transfers up to and including this XAF amount pay zero fee',
                 'category' => 'pricing',
@@ -198,7 +198,7 @@ class AdminSettingsSeeder extends Seeder
             ],
             [
                 'setting_key' => 'pricing.fee_tiers',
-                'setting_value' => '[{"min":50001,"max":200000,"flat_xaf":500,"percent_bps":50,"cap_xaf":1500},{"min":200001,"max":10000000,"flat_xaf":1000,"percent_bps":40,"cap_xaf":5000}]',
+                'setting_value' => '[]',
                 'setting_type' => 'json',
                 'description' => 'Tiered fees for amounts above free threshold',
                 'category' => 'pricing',
@@ -207,7 +207,7 @@ class AdminSettingsSeeder extends Seeder
             ],
             [
                 'setting_key' => 'pricing.fx_margin_bps',
-                'setting_value' => '50',
+                'setting_value' => '450',
                 'setting_type' => 'integer',
                 'description' => 'FX margin in basis points applied to interbank rate (XAF→NGN)',
                 'category' => 'pricing',

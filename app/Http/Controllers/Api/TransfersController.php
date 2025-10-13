@@ -320,46 +320,20 @@ class TransfersController extends Controller
             $cross = $usdToNgn / $usdToXaf;
             $amountXaf = (int) round($data['amountXaf']);
 
-            $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
-            // Components for UI transparency (best-effort; fields may be null under pricing v2)
+            // Always use PricingEngine for pricing
+            $engine = app(PricingEngine::class);
+            $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
+                'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
+            ]);
+            $adjustedRate = (float) $calc['effective_rate'];
+            $feeTotal = (int) $calc['fee_amount_xaf'];
+            $totalPayXaf = (int) $calc['total_pay_xaf'];
+            $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
+            // Minimal transparency components for UI
             $components = [
-                'fxMarginBps' => null,
-                'percentBps' => null,
-                'fixedFeeXaf' => null,
-                'percentFeeXaf' => null,
-                'levyXaf' => null,
-                'totalFeeXaf' => null,
+                'fxMarginBps' => (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0)),
+                'totalFeeXaf' => $feeTotal,
             ];
-            if ($pricingV2) {
-                $engine = app(PricingEngine::class);
-                $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
-                    'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
-                ]);
-                $adjustedRate = (float) $calc['effective_rate'];
-                $feeTotal = (int) $calc['fee_amount_xaf'];
-                $totalPayXaf = (int) $calc['total_pay_xaf'];
-                $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
-                // Surface known knobs to UI if available in admin settings
-                $components['fxMarginBps'] = (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0));
-                $components['totalFeeXaf'] = $feeTotal;
-            } else {
-                $marginBps = (int) (env('FX_MARGIN_BPS', 0));
-                $adjustedRate = $cross * (1 - ($marginBps / 10000));
-                $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
-                $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
-                $percentFee = (int) floor($amountXaf * $percentBps / 10000);
-                $feeTotal = $fixedFee + $percentFee;
-                $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
-                $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
-                $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
-                $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
-                // Fill components for legacy path
-                $components['fxMarginBps'] = $marginBps;
-                $components['percentBps'] = $percentBps;
-                $components['fixedFeeXaf'] = $fixedFee;
-                $components['percentFeeXaf'] = $percentFee;
-                $components['totalFeeXaf'] = $feeTotal;
-            }
 
             $ttl = (int) AdminSetting::getValue('pricing.quote_ttl_secs', (int) env('QUOTE_TTL_SECONDS', 90));
             $userId = Auth::id() ?? (int) (\App\Models\User::query()->min('id'));

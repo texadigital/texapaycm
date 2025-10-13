@@ -181,39 +181,22 @@ class TransferController extends Controller
 
         $amountXaf = (int) round($validated['amount_xaf']);
 
-        // Feature-flagged pricing v2 path
-        $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
-        if ($pricingV2) {
-            $engine = app(PricingEngine::class);
-            $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
-                'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
-            ]);
-            $adjustedRate = (float) $calc['effective_rate'];
-            $feeTotal = (int) $calc['fee_amount_xaf'];
-            $totalPayXaf = (int) $calc['total_pay_xaf'];
-            $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
+        // Always use centralized PricingEngine
+        $engine = app(PricingEngine::class);
+        $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
+            'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
+        ]);
+        $adjustedRate = (float) $calc['effective_rate'];
+        $feeTotal = (int) $calc['fee_amount_xaf'];
+        $totalPayXaf = (int) $calc['total_pay_xaf'];
+        $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
 
-            \Log::info('pricing_v2_applied', [
-                'amount_xaf' => $amountXaf,
-                'fx_margin_bps' => (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0)),
-                'fee_amount_xaf' => $feeTotal,
-                'effective_rate' => $adjustedRate,
-            ]);
-        } else {
-            // Legacy env-based pricing
-            $marginBps = (int) (env('FX_MARGIN_BPS', 0));
-            $adjustedRate = $cross * (1 - ($marginBps / 10000));
-
-            $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
-            $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
-            $percentFee = (int) floor($amountXaf * $percentBps / 10000);
-            $feeTotal = $fixedFee + $percentFee;
-
-            $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
-            $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
-            $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
-            $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
-        }
+        \Log::info('pricing_v2_applied', [
+            'amount_xaf' => $amountXaf,
+            'fx_margin_bps' => (int) AdminSetting::getValue('pricing.fx_margin_bps', (int) env('FX_MARGIN_BPS', 0)),
+            'fee_amount_xaf' => $feeTotal,
+            'effective_rate' => $adjustedRate,
+        ]);
 
         // TTL: prefer pricing setting when v2, else env
         $ttl = (int) AdminSetting::getValue('pricing.quote_ttl_secs', (int) env('QUOTE_TTL_SECONDS', 90));

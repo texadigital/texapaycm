@@ -81,9 +81,8 @@ class PricingController extends Controller
 
         $usdToXaf = (float) $fx['usd_to_xaf'];
         $usdToNgn = (float) $fx['usd_to_ngn'];
-        $pricingV2 = (bool) AdminSetting::getValue('pricing_v2.enabled', false);
 
-        if ($hasAmount && $pricingV2) {
+        if ($hasAmount) {
             $engine = app(PricingEngine::class);
             $calc = $engine->price($amountXaf, $usdToXaf, $usdToNgn, [
                 'charge_mode' => env('FEES_CHARGE_MODE', 'on_top'),
@@ -92,18 +91,6 @@ class PricingController extends Controller
             $feeTotal = (int) $calc['fee_amount_xaf'];
             $totalPayXaf = (int) $calc['total_pay_xaf'];
             $receiveNgnMinor = (int) $calc['receive_ngn_minor'];
-        } elseif ($hasAmount) {
-            $cross = $usdToNgn / $usdToXaf;
-            $marginBps = (int) (env('FX_MARGIN_BPS', 0));
-            $adjustedRate = $cross * (1 - ($marginBps / 10000));
-            $fixedFee = (int) (env('FEES_FIXED_XAF', 0));
-            $percentBps = (int) (env('FEES_PERCENT_BPS', 0));
-            $percentFee = (int) floor($amountXaf * $percentBps / 10000);
-            $feeTotal = $fixedFee + $percentFee;
-            $chargeOnTop = (env('FEES_CHARGE_MODE', 'on_top') === 'on_top');
-            $totalPayXaf = $chargeOnTop ? ($amountXaf + $feeTotal) : $amountXaf;
-            $effectiveSendXaf = $chargeOnTop ? $amountXaf : max($amountXaf - $feeTotal, 0);
-            $receiveNgnMinor = (int) round($effectiveSendXaf * $adjustedRate * 100);
         }
 
         // If no amount provided, return simple rate preview only
