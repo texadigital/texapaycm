@@ -88,10 +88,10 @@ jobs:
             export COMPOSER_MEMORY_LIMIT=-1
             "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-ansi --no-progress
 
-            # Put app in maintenance for safe DB migrations (show 503 page)
-            php artisan down --render="errors/503" || true
+            # Put app in maintenance for safe DB migrations (default maintenance page)
+            php artisan down || true
 
-            php artisan storage:link || true
+            php artisan storage:link --force || true
 
             # Ensure we read fresh .env (avoid stale cached config)
             php artisan config:clear || true
