@@ -128,7 +128,7 @@ jobs:
             
             # Politely ask queue workers to restart after code changes
             php artisan queue:restart || true
-            echo "Deploy finished ok at $(date)"
+            echo "Deploy finished ok"
 
             # Rebuild caches after code changes
             php artisan config:cache || true
