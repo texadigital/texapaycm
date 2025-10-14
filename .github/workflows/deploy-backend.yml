@@ -52,17 +52,14 @@ jobs:
       - name: Remote build, link, and reload PHP-FPM/Nginx
         run: |
           set -e
-          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "${VPS_USER}@${VPS_HOST}" \
-            BACKEND_APP_DIR="${BACKEND_APP_DIR}" \
-            SITE_USER="${SITE_USER}" \
-            REL="${REL}" \
-            BACKEND_HEALTHCHECK_URL="${BACKEND_HEALTHCHECK_URL}" \
-            bash -lc '
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "${VPS_USER}@${VPS_HOST}" bash -lc "
             set -e
-            APP_DIR="$BACKEND_APP_DIR"
-            REL_NAME="$REL"
-            REL="$APP_DIR/releases/$REL_NAME"
-            echo "Using release: $REL"
+            APP_DIR='${BACKEND_APP_DIR}'
+            SITE_USER='${SITE_USER}'
+            REL_NAME='${REL}'
+            HC_URL='${BACKEND_HEALTHCHECK_URL}'
+            REL=\"$APP_DIR/releases/$REL_NAME\"
+            echo \"Using release: $REL\"
 
             # Ensure shared structure and env
             mkdir -p "$APP_DIR/shared"
@@ -170,9 +167,9 @@ jobs:
             fi
 
             # Optional healthcheck
-            if [ -n "${BACKEND_HEALTHCHECK_URL}" ]; then
-              echo "Running healthcheck: ${BACKEND_HEALTHCHECK_URL}"
-              if ! curl -fsS --max-time 10 "${BACKEND_HEALTHCHECK_URL}" >/dev/null; then
+            if [ -n \"$HC_URL\" ]; then
+              echo \"Running healthcheck: $HC_URL\"
+              if ! curl -fsS --max-time 10 \"$HC_URL\" >/dev/null; then
                 echo "Healthcheck failed"
                 exit 1
               fi
@@ -192,7 +189,7 @@ jobs:
 
             # Optional: keep only the 5 newest releases to save disk
             cd "$APP_DIR/releases" && ls -1t | tail -n +6 | xargs -r -I {} rm -rf {}
-          ' || ec=$?
+          " || ec=$?
           if [ "${ec:-0}" -eq 255 ]; then
             echo "Ignoring SSH exit 255 (broken pipe) after remote completion";
             exit 0;
