@@ -21,7 +21,7 @@ class NotificationService
         string $type,
         ?User $user,
         array $payload = [],
-        array $channels = null
+        ?array $channels = null
     ): ?UserNotification {
         try {
             // Check if user exists

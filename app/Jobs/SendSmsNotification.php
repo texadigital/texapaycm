@@ -142,7 +142,7 @@ class SendSmsNotification implements ShouldQueue
                 $code = (string)($payload['reset_code'] ?? '');
                 $mins = 15;
                 return $code
-                    ? "TexaPay: Your password reset code is ${code}. It expires in ${mins} minutes."
+                    ? "TexaPay: Your password reset code is {$code}. It expires in {$mins} minutes."
                     : "TexaPay: Password reset requested. Please use the code sent to you to reset your password.";
 
             case 'auth.password.reset.success':
