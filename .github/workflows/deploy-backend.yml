@@ -110,8 +110,12 @@ jobs:
             # Prefer Horizon if available; otherwise use Supervisor. Idempotent where possible.
             if php artisan list --raw | grep -q '^horizon:'; then
               php artisan horizon:terminate || true
-              # If Horizon not running, start it
-              php artisan horizon:status || php artisan horizon || true
+              # If Horizon not running, start it in background so SSH doesn't hang
+              if ! php artisan horizon:status >/dev/null 2>&1; then
+                nohup php artisan horizon >/dev/null 2>&1 &
+                sleep 2
+                php artisan horizon:status || true
+              fi
             else
               # Supervisor flow: reread config, update, and start workers
               systemctl reload supervisor || true
@@ -122,6 +126,7 @@ jobs:
             
             # Politely ask queue workers to restart after code changes
             php artisan queue:restart || true
+            echo "Deploy finished ok at $(date)"
 
             # Rebuild caches after code changes
             php artisan config:cache || true
