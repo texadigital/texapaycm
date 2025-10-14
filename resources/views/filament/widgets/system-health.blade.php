@@ -8,9 +8,7 @@
                 'OpenExchangeRates' => $h['oxr'] ?? [],
                 'Queue' => $h['queue'] ?? [],
             ] as $name => $res)
-                @php
-                    $ok = (bool) data_get($res, 'ok', false);
-                @endphp
+                @php($ok = (bool) data_get($res, 'ok', false))
                 <x-filament::card x-data="{ open: false }">
                     <div class="flex items-center justify-between">
                         <div class="font-medium">{{ $name }}</div>
