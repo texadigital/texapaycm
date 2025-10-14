@@ -106,6 +106,23 @@ class Kernel extends ConsoleKernel
             }
         })->dailyAt('02:00')->runInBackground();
 
+        // Notifications: Daily pruning of old notification records (configurable retention)
+        $schedule->call(function () {
+            try {
+                $days = (int) config('notifications.retention_days', 90);
+                $cutoff = now()->subDays($days);
+                \App\Models\UserNotification::where('created_at', '<', $cutoff)->chunkById(1000, function ($chunk) {
+                    foreach ($chunk as $row) { $row->delete(); }
+                });
+                \App\Models\NotificationEvent::where('created_at', '<', $cutoff)->chunkById(1000, function ($chunk) {
+                    foreach ($chunk as $row) { $row->delete(); }
+                });
+                \Log::info('Notifications pruning completed', ['retention_days' => $days]);
+            } catch (\Throwable $e) {
+                \Log::error('Notifications pruning failed', ['error' => $e->getMessage()]);
+            }
+        })->dailyAt('03:30')->runInBackground();
+
         // PEP: Weekly rescan (subset for demo)
         $schedule->call(function () {
             try {

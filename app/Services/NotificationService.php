@@ -33,8 +33,25 @@ class NotificationService
                 return null;
             }
 
-            // Check if user has notification preferences enabled
-            if (!$this->shouldSendNotification($user, $type)) {
+            // Determine channels to use (explicit override or user preferences)
+            $channelsToUse = $channels ?? $this->getUserChannels($user, $type);
+
+            // Throttle per user+type to prevent floods (configurable)
+            $throttleSecs = (int) config('notifications.throttle_seconds', 60);
+            if ($throttleSecs > 0) {
+                $throttleKey = sprintf('notify:%d:%s', $user->id, $type);
+                if (!Cache::add($throttleKey, 1, now()->addSeconds($throttleSecs))) {
+                    Log::info('Notification throttled', [
+                        'user_id' => $user->id,
+                        'type' => $type,
+                        'secs' => $throttleSecs,
+                    ]);
+                    return null;
+                }
+            }
+
+            // Check if user has notification preferences enabled (per-channel and quiet-hours aware)
+            if (!$this->shouldSendNotification($user, $type, $channelsToUse)) {
                 return null;
             }
 
@@ -55,9 +72,6 @@ class NotificationService
                 Log::warning('No template found for notification type', ['type' => $type]);
                 return null;
             }
-
-            // Determine channels to use
-            $channelsToUse = $channels ?? $this->getUserChannels($user, $type);
 
             // Create the notification record
             $notification = UserNotification::create([
@@ -104,15 +118,23 @@ class NotificationService
     /**
      * Check if user should receive notifications
      */
-    protected function shouldSendNotification(User $user, string $type): bool
+    protected function shouldSendNotification(User $user, string $type, array $channels): bool
     {
         // Always allow password reset notifications regardless of global toggles
         if (str_starts_with($type, 'auth.password.reset.')) {
             return true;
         }
 
-        // Check global notification preferences
-        if (!$user->email_notifications && !$user->sms_notifications) {
+        // If email channel requested but user disabled email, drop email for this notification
+        if (in_array('email', $channels) && !$user->email_notifications) {
+            $channels = array_values(array_diff($channels, ['email']));
+        }
+        // If sms channel requested but user disabled sms, drop sms
+        if (in_array('sms', $channels) && !$user->sms_notifications) {
+            $channels = array_values(array_diff($channels, ['sms']));
+        }
+        // If no channels remain (e.g., only push/in_app not requested), do not send
+        if (empty($channels)) {
             return false;
         }
 
@@ -148,151 +170,7 @@ class NotificationService
      */
     protected function getNotificationTemplate(string $type, array $payload): ?array
     {
-        $templates = [
-            // Authentication
-            'auth.login.success' => [
-                'title' => 'Welcome back!',
-                'message' => 'You have successfully logged in to your TexaPay account.',
-            ],
-            'auth.login.failed' => [
-                'title' => 'Failed Login Attempt',
-                'message' => 'We detected a failed login attempt on your account. If this wasn\'t you, please secure your account immediately.',
-            ],
-            'auth.login.new_device' => [
-                'title' => 'New Device Login',
-                'message' => 'Your account was accessed from a new device. If this wasn\'t you, please secure your account immediately.',
-            ],
-            // Password reset
-            'auth.password.reset.requested' => [
-                'title' => 'Password Reset Code',
-                'message' => 'Your password reset code was requested. If this wasn\'t you, please secure your account.',
-            ],
-            'auth.password.reset.success' => [
-                'title' => 'Password Reset Successful',
-                'message' => 'Your password has been reset successfully. You can now sign in with your new password.',
-            ],
-
-            // Profile
-            'profile.updated' => [
-                'title' => 'Profile Updated',
-                'message' => 'Your profile information has been successfully updated.',
-            ],
-            'security.settings.updated' => [
-                'title' => 'Security Settings Updated',
-                'message' => 'Your security settings have been updated successfully.',
-            ],
-
-            // KYC
-            'kyc.started' => [
-                'title' => 'KYC Verification Started',
-                'message' => 'Your identity verification process has been initiated. Please complete the required steps.',
-            ],
-            'kyc.completed' => [
-                'title' => 'KYC Verification Completed',
-                'message' => 'Congratulations! Your identity has been successfully verified.',
-            ],
-            'kyc.failed' => [
-                'title' => 'KYC Verification Failed',
-                'message' => 'Your identity verification was unsuccessful. Please try again with clear, valid documents.',
-            ],
-
-            // Transfers
-            'transfer.quote.created' => [
-                'title' => 'Quote Created',
-                'message' => 'Your transfer quote has been created. Please confirm the payment within the time limit.',
-            ],
-            'transfer.quote.expired' => [
-                'title' => 'Quote Expired',
-                'message' => 'Your transfer quote has expired. Please create a new quote to continue.',
-            ],
-            'transfer.initiated' => [
-                'title' => 'Transfer Initiated',
-                'message' => 'Your transfer has been initiated. Please complete the payment on your mobile money app.',
-            ],
-            'transfer.payin.success' => [
-                'title' => 'Payment Received',
-                'message' => 'Your payment has been received successfully. Processing payout to recipient.',
-            ],
-            'transfer.payin.failed' => [
-                'title' => 'Payment Failed',
-                'message' => 'Your payment could not be processed. Please try again or contact support.',
-            ],
-            'transfer.payout.success' => [
-                'title' => 'Transfer Completed',
-                'message' => 'Your transfer has been completed successfully. The recipient has received the funds.',
-            ],
-            'transfer.payout.failed' => [
-                'title' => 'Transfer Failed',
-                'message' => 'Your transfer could not be completed. A refund has been initiated automatically.',
-            ],
-            'transfer.refund.initiated' => [
-                'title' => 'Refund Initiated',
-                'message' => 'A refund has been initiated for your failed transfer. You will receive your money back shortly.',
-            ],
-            'transfer.refund.completed' => [
-                'title' => 'Refund Completed',
-                'message' => 'Your refund has been processed successfully. The funds have been returned to your account.',
-            ],
-
-            // Protected (Escrow)
-            'protected.locked' => [
-                'title' => 'Funds Held in Escrow',
-                'message' => 'Your payment has been received and is being held securely. You can approve release when satisfied.',
-            ],
-            'protected.approval.requested' => [
-                'title' => 'Release Requested',
-                'message' => 'The seller has requested a release of funds. Please review and approve if satisfied.',
-            ],
-            'protected.approved' => [
-                'title' => 'Funds Released',
-                'message' => 'You approved the release. The seller is being paid now.',
-            ],
-            'protected.auto_release' => [
-                'title' => 'Funds Auto-Released',
-                'message' => 'Funds were released automatically after the waiting period.',
-            ],
-            'protected.disputed' => [
-                'title' => 'Dispute Opened',
-                'message' => 'You opened a dispute. Our team will review and keep the funds on hold.',
-            ],
-            'protected.payout.success' => [
-                'title' => 'Escrow Completed',
-                'message' => 'Funds have been paid to the seller. Thank you for using Texa Protected.',
-            ],
-            'protected.payout.failed' => [
-                'title' => 'Payout Issue',
-                'message' => 'We could not complete the payout to the seller yet. We are retrying and will update you.',
-            ],
-
-            // Support
-            'support.ticket.created' => [
-                'title' => 'Support Ticket Created',
-                'message' => 'Your support ticket has been created. We will respond within 24 hours.',
-            ],
-            'support.ticket.replied' => [
-                'title' => 'Support Reply',
-                'message' => 'You have received a reply to your support ticket.',
-            ],
-            'support.ticket.closed' => [
-                'title' => 'Support Ticket Closed',
-                'message' => 'Your support ticket has been closed. If you need further assistance, please create a new ticket.',
-            ],
-
-            // Limits
-            'limits.warning.daily' => [
-                'title' => 'Daily Limit Warning',
-                'message' => 'You are approaching your daily transaction limit. Please monitor your usage.',
-            ],
-            'limits.warning.monthly' => [
-                'title' => 'Monthly Limit Warning',
-                'message' => 'You are approaching your monthly transaction limit. Please monitor your usage.',
-            ],
-            'limits.exceeded' => [
-                'title' => 'Transaction Limit Exceeded',
-                'message' => 'You have exceeded your transaction limit. Please contact support to increase your limits.',
-            ],
-        ];
-
+        $templates = (array) config('notifications.templates', []);
         return $templates[$type] ?? null;
     }
 
@@ -334,9 +212,18 @@ class NotificationService
      */
     protected function isQuietHours(): bool
     {
-        // TODO: Implement quiet hours logic based on user timezone
-        // For now, return false (no quiet hours)
-        return false;
+        $cfg = (array) config('notifications.quiet_hours', []);
+        if (empty($cfg['enabled'])) { return false; }
+        $start = $cfg['start'] ?? '22:00';
+        $end = $cfg['end'] ?? '06:00';
+        $now = now();
+        $startT = now()->setTimeFromTimeString($start);
+        $endT = now()->setTimeFromTimeString($end);
+        if ($startT->lte($endT)) {
+            return $now->between($startT, $endT);
+        }
+        // Overnight window (e.g., 22:00 -> 06:00 next day)
+        return $now->gte($startT) || $now->lte($endT);
     }
 
     /**

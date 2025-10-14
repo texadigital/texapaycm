@@ -46,16 +46,7 @@ class ProtectedTransactionResource extends Resource
                     'disputed' => 'disputed',
                 ]),
             ])
-            ->actions([
-                Tables\Actions\Action::make('view')
-                    ->url(fn(ProtectedTransaction $r) => Pages\ViewProtectedTransaction::getUrl([$r->getKeyName() => $r->getKey()]))
-                    ->icon('heroicon-o-eye'),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->recordUrl(fn(ProtectedTransaction $r) => Pages\ViewProtectedTransaction::getUrl([$r->getKeyName() => $r->getKey()]));
     }
 
     public static function getPages(): array

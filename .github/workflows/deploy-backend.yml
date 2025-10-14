@@ -106,15 +106,22 @@ jobs:
             # Run migrations
             php artisan migrate --force
 
-            # Restart workers to pick new code
-            # Prefer Horizon if available; otherwise try Supervisor. These commands are idempotent.
+            # Restart workers to pick new code and ensure they are running
+            # Prefer Horizon if available; otherwise use Supervisor. Idempotent where possible.
             if php artisan list --raw | grep -q '^horizon:'; then
               php artisan horizon:terminate || true
+              # If Horizon not running, start it
+              php artisan horizon:status || php artisan horizon || true
             else
-              # Try to reload supervisor or specific program if present
+              # Supervisor flow: reread config, update, and start workers
               systemctl reload supervisor || true
-              supervisorctl restart laravel-worker:* || true
+              supervisorctl reread || true
+              supervisorctl update || true
+              supervisorctl start laravel-worker:* || true
             fi
+            
+            # Politely ask queue workers to restart after code changes
+            php artisan queue:restart || true
 
             # Rebuild caches after code changes
             php artisan config:cache || true
